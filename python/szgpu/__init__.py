@@ -1,15 +1,15 @@
-"""Python bindings for the FSZ GPU error-bounded lossy compressor.
+"""Python bindings for the SZ-GPU error-bounded lossy compressor.
 
-FSZ compresses float32 and float64 arrays on the GPU under an absolute
+SZ-GPU compresses float32 and float64 arrays on the GPU under an absolute
 error bound: every reconstructed value lands within that bound of the original,
 up to rounding on the last bit. The library checks itself against the bound
 with one percent of slack, and so should you. These bindings talk to the shared
 library through ctypes and numpy, with no other dependencies.
 
-    import numpy as np, fsz
+    import numpy as np, szgpu
     field = np.sin(np.linspace(0, 8, 64 * 64 * 64, dtype=np.float32)).reshape(64, 64, 64)
-    blob = fsz.compress(field, 1e-3, mode="rel")     # bytes, self-describing
-    back = fsz.decompress(blob)                      # float32, original shape
+    blob = szgpu.compress(field, 1e-3, mode="rel")     # bytes, self-describing
+    back = szgpu.decompress(blob)                      # float32, original shape
     print(field.nbytes / len(blob), np.abs(field - back).max())
 
 The element type follows the input array: a float64 array compresses as
@@ -20,7 +20,7 @@ which one it holds, so :func:`decompress` needs nothing but the blob.
 :func:`compress` returns a self-describing container: a 56 byte header holding
 the shape, the element type, the absolute error bound and the bitstream length,
 followed by the bitstream exactly as the library produced it. The layout is the
-one the ``fsz`` command line tool reads and writes, so blobs move between the
+one the ``szgpu`` command line tool reads and writes, so blobs move between the
 two freely.
 
 Arrays of any dimensionality are accepted, up to the three dimensions that the
@@ -28,9 +28,9 @@ header records. Anything wider should be reshaped by the caller.
 
 The shared library is located at import time, in this order:
 
-1. the path in the ``FSZ_LIB`` environment variable,
-2. ``build/libfsz.so`` beside the package in a repository checkout,
-3. whatever ``ctypes.util.find_library("fsz")`` turns up.
+1. the path in the ``SZGPU_LIB`` environment variable,
+2. ``build/libszgpu.so`` beside the package in a repository checkout,
+3. whatever ``ctypes.util.find_library("szgpu")`` turns up.
 """
 
 import ctypes
@@ -40,7 +40,7 @@ import struct
 
 import numpy as np
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 __all__ = [
     "compress",
@@ -69,33 +69,33 @@ MAX_HEADER_DIMS = 3
 MAGIC = b"FSZ1"
 
 assert struct.calcsize(HEADER_FORMAT) == 56, (
-    "the FSZ header layout must pack to exactly 56 bytes, got %d"
+    "the SZ-GPU header layout must pack to exactly 56 bytes, got %d"
     % struct.calcsize(HEADER_FORMAT)
 )
 
 
 
 def _repo_build_candidate():
-    """Path to build/libfsz.so as laid out in a repository checkout."""
+    """Path to build/libszgpu.so as laid out in a repository checkout."""
     here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.normpath(os.path.join(here, "..", "..", "build", "libfsz.so"))
+    return os.path.normpath(os.path.join(here, "..", "..", "build", "libszgpu.so"))
 
 
 def _load_library():
-    """Find and open libfsz.so, or raise ImportError naming every place tried."""
+    """Find and open libszgpu.so, or raise ImportError naming every place tried."""
     attempts = []
 
-    env_path = os.environ.get("FSZ_LIB")
+    env_path = os.environ.get("SZGPU_LIB")
     if env_path:
-        attempts.append(("FSZ_LIB environment variable", env_path))
+        attempts.append(("SZGPU_LIB environment variable", env_path))
     else:
-        attempts.append(("FSZ_LIB environment variable", None))
+        attempts.append(("SZGPU_LIB environment variable", None))
 
-    bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libfsz.so")
+    bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), "libszgpu.so")
     attempts.append(("library built into the installed package",
                      bundled if os.path.exists(bundled) else None))
     attempts.append(("build directory beside the package", _repo_build_candidate()))
-    attempts.append(("system search path", ctypes.util.find_library("fsz")))
+    attempts.append(("system search path", ctypes.util.find_library("szgpu")))
 
     notes = []
     for source, path in attempts:
@@ -111,12 +111,12 @@ def _load_library():
             notes.append("  %s: %s (%s)" % (source, path, exc))
 
     raise ImportError(
-        "the FSZ shared library could not be loaded. Tried, in order:\n"
+        "the SZ-GPU shared library could not be loaded. Tried, in order:\n"
         + "\n".join(notes)
         + "\n\nBuild it with\n"
-        "  cmake -S <repo> -B <repo>/build -DFSZ_BUILD_SHARED=ON\n"
-        "  cmake --build <repo>/build --target fsz_shared -j4\n"
-        "or point FSZ_LIB at an existing libfsz.so. If the library exists but "
+        "  cmake -S <repo> -B <repo>/build -DSZGPU_BUILD_SHARED=ON\n"
+        "  cmake --build <repo>/build --target szgpu_shared -j4\n"
+        "or point SZGPU_LIB at an existing libszgpu.so. If the library exists but "
         "fails to load, check that the CUDA runtime (libcudart) is on "
         "LD_LIBRARY_PATH."
     )
@@ -129,60 +129,60 @@ _c_float_p = ctypes.POINTER(ctypes.c_float)
 _c_double_p = ctypes.POINTER(ctypes.c_double)
 _c_ubyte_p = ctypes.POINTER(ctypes.c_ubyte)
 
-_lib.fsz_version.argtypes = []
-_lib.fsz_version.restype = ctypes.c_char_p
+_lib.szgpu_version.argtypes = []
+_lib.szgpu_version.restype = ctypes.c_char_p
 
-_lib.fsz_status_string.argtypes = [ctypes.c_int]
-_lib.fsz_status_string.restype = ctypes.c_char_p
+_lib.szgpu_status_string.argtypes = [ctypes.c_int]
+_lib.szgpu_status_string.restype = ctypes.c_char_p
 
-_lib.fsz_num_tiles.argtypes = [ctypes.c_size_t]
-_lib.fsz_num_tiles.restype = ctypes.c_size_t
+_lib.szgpu_num_tiles.argtypes = [ctypes.c_size_t]
+_lib.szgpu_num_tiles.restype = ctypes.c_size_t
 
-_lib.fsz_max_compressed_bytes.argtypes = [ctypes.c_size_t]
-_lib.fsz_max_compressed_bytes.restype = ctypes.c_size_t
+_lib.szgpu_max_compressed_bytes.argtypes = [ctypes.c_size_t]
+_lib.szgpu_max_compressed_bytes.restype = ctypes.c_size_t
 
-_lib.fsz_compress_hostptr.argtypes = [
+_lib.szgpu_compress_hostptr.argtypes = [
     _c_float_p,      # in
     _c_ubyte_p,      # cmp
     ctypes.c_size_t,  # n_elements
     ctypes.c_float,  # abs_error_bound
     _c_size_p,       # out_cmp_size
 ]
-_lib.fsz_compress_hostptr.restype = ctypes.c_int
+_lib.szgpu_compress_hostptr.restype = ctypes.c_int
 
-_lib.fsz_decompress_hostptr.argtypes = [
+_lib.szgpu_decompress_hostptr.argtypes = [
     _c_float_p,      # out
     _c_ubyte_p,      # cmp
     ctypes.c_size_t,  # cmp_size
     ctypes.c_size_t,  # n_elements
     ctypes.c_float,  # abs_error_bound
 ]
-_lib.fsz_decompress_hostptr.restype = ctypes.c_int
+_lib.szgpu_decompress_hostptr.restype = ctypes.c_int
 
-_lib.fsz_compress_hostptr_f64.argtypes = [
+_lib.szgpu_compress_hostptr_f64.argtypes = [
     _c_double_p,     # in
     _c_ubyte_p,      # cmp
     ctypes.c_size_t,  # n_elements
     ctypes.c_double,  # abs_error_bound
     _c_size_p,       # out_cmp_size
 ]
-_lib.fsz_compress_hostptr_f64.restype = ctypes.c_int
+_lib.szgpu_compress_hostptr_f64.restype = ctypes.c_int
 
-_lib.fsz_decompress_hostptr_f64.argtypes = [
+_lib.szgpu_decompress_hostptr_f64.argtypes = [
     _c_double_p,     # out
     _c_ubyte_p,      # cmp
     ctypes.c_size_t,  # cmp_size
     ctypes.c_size_t,  # n_elements
     ctypes.c_double,  # abs_error_bound
 ]
-_lib.fsz_decompress_hostptr_f64.restype = ctypes.c_int
+_lib.szgpu_decompress_hostptr_f64.restype = ctypes.c_int
 
-FSZ_STATUS_OK = 0
+SZGPU_STATUS_OK = 0
 
 
 def _status_text(status):
     """Human readable text for a library status code."""
-    text = _lib.fsz_status_string(ctypes.c_int(int(status)))
+    text = _lib.szgpu_status_string(ctypes.c_int(int(status)))
     if text is None:
         return "unknown status"
     return text.decode("utf-8", "replace")
@@ -190,7 +190,7 @@ def _status_text(status):
 
 def _check(status, what):
     """Raise RuntimeError unless ``status`` is the library's OK code."""
-    if int(status) != FSZ_STATUS_OK:
+    if int(status) != SZGPU_STATUS_OK:
         raise RuntimeError(
             "%s failed: %s (status %d)" % (what, _status_text(status), int(status))
         )
@@ -209,7 +209,7 @@ def _as_input_array(arr):
 
     if arr.dtype != np.float32 and arr.dtype != np.float64:
         raise TypeError(
-            "FSZ compresses float32 and float64 data, but the input array has "
+            "SZ-GPU compresses float32 and float64 data, but the input array has "
             "dtype %s. Convert it explicitly, for example "
             "arr.astype(np.float32), so the precision loss is your choice and "
             "not a silent cast." % arr.dtype
@@ -221,7 +221,7 @@ def _as_input_array(arr):
         )
     if arr.ndim > MAX_HEADER_DIMS:
         raise ValueError(
-            "the input array has %d dimensions, and the FSZ container records at "
+            "the input array has %d dimensions, and the SZ-GPU container records at "
             "most %d. Reshape it first, for example "
             "arr.reshape(arr.shape[0], arr.shape[1], -1), and reshape the result "
             "of decompress() back afterwards." % (arr.ndim, MAX_HEADER_DIMS)
@@ -335,7 +335,7 @@ def _parse_header(data):
     """
     if data.size < HEADER_SIZE:
         raise ValueError(
-            "this is not an FSZ container: %d bytes is shorter than the %d byte "
+            "this is not an SZ-GPU container: %d bytes is shorter than the %d byte "
             "header." % (data.size, HEADER_SIZE)
         )
 
@@ -344,7 +344,7 @@ def _parse_header(data):
 
     if magic != MAGIC:
         raise ValueError(
-            "this is not an FSZ container: expected the magic %r, found %r. A "
+            "this is not an SZ-GPU container: expected the magic %r, found %r. A "
             "bare bitstream has no header, so decompress it with "
             "decompress_raw(payload, n, abs_eb)." % (MAGIC, magic)
         )
@@ -396,19 +396,19 @@ def library_version():
     """Return the version string reported by the shared library.
 
     >>> library_version()
-    '1.0.0'
+    '1.0.1'
     """
-    return _lib.fsz_version().decode("utf-8", "replace")
+    return _lib.szgpu_version().decode("utf-8", "replace")
 
 
 def num_tiles(n):
     """Return the number of tiles the library splits ``n`` elements into."""
-    return int(_lib.fsz_num_tiles(ctypes.c_size_t(int(n))))
+    return int(_lib.szgpu_num_tiles(ctypes.c_size_t(int(n))))
 
 
 def max_compressed_bytes(n):
     """Return the worst case compressed size in bytes for ``n`` elements."""
-    return int(_lib.fsz_max_compressed_bytes(ctypes.c_size_t(int(n))))
+    return int(_lib.szgpu_max_compressed_bytes(ctypes.c_size_t(int(n))))
 
 
 def compress_raw(arr, abs_eb):
@@ -449,23 +449,23 @@ def compress_raw(arr, abs_eb):
     written = ctypes.c_size_t(0)
 
     if f64:
-        status = _lib.fsz_compress_hostptr_f64(
+        status = _lib.szgpu_compress_hostptr_f64(
             arr.ctypes.data_as(_c_double_p),
             buf.ctypes.data_as(_c_ubyte_p),
             ctypes.c_size_t(n),
             ctypes.c_double(float(abs_eb)),
             ctypes.byref(written),
         )
-        _check(status, "fsz_compress_hostptr_f64")
+        _check(status, "szgpu_compress_hostptr_f64")
     else:
-        status = _lib.fsz_compress_hostptr(
+        status = _lib.szgpu_compress_hostptr(
             arr.ctypes.data_as(_c_float_p),
             buf.ctypes.data_as(_c_ubyte_p),
             ctypes.c_size_t(n),
             ctypes.c_float(float(abs_eb)),
             ctypes.byref(written),
         )
-        _check(status, "fsz_compress_hostptr")
+        _check(status, "szgpu_compress_hostptr")
 
     return buf[: written.value].tobytes()
 
@@ -505,7 +505,7 @@ def decompress_raw(payload, n, abs_eb, dtype=np.float32):
     dtype = np.dtype(dtype)
     if dtype != np.float32 and dtype != np.float64:
         raise TypeError(
-            "FSZ reconstructs float32 and float64 data, but dtype is %s." % dtype
+            "SZ-GPU reconstructs float32 and float64 data, but dtype is %s." % dtype
         )
     f64 = dtype == np.float64
 
@@ -518,23 +518,23 @@ def decompress_raw(payload, n, abs_eb, dtype=np.float32):
 
     out = np.empty(n, dtype=dtype)
     if f64:
-        status = _lib.fsz_decompress_hostptr_f64(
+        status = _lib.szgpu_decompress_hostptr_f64(
             out.ctypes.data_as(_c_double_p),
             data.ctypes.data_as(_c_ubyte_p),
             ctypes.c_size_t(int(data.size)),
             ctypes.c_size_t(n),
             ctypes.c_double(float(abs_eb)),
         )
-        _check(status, "fsz_decompress_hostptr_f64")
+        _check(status, "szgpu_decompress_hostptr_f64")
     else:
-        status = _lib.fsz_decompress_hostptr(
+        status = _lib.szgpu_decompress_hostptr(
             out.ctypes.data_as(_c_float_p),
             data.ctypes.data_as(_c_ubyte_p),
             ctypes.c_size_t(int(data.size)),
             ctypes.c_size_t(n),
             ctypes.c_float(float(abs_eb)),
         )
-        _check(status, "fsz_decompress_hostptr")
+        _check(status, "szgpu_decompress_hostptr")
     return out
 
 
@@ -544,7 +544,7 @@ def compress(arr, eb, mode="rel"):
     The blob is a 56 byte header followed by the compressed bitstream. The
     header records the shape, the element type, the absolute error bound and
     the bitstream length, which is everything :func:`decompress` needs, and it
-    is the same container the ``fsz`` command line tool reads.
+    is the same container the ``szgpu`` command line tool reads.
 
     Args:
         arr: float32 or float64 numpy array of 1 to 3 dimensions. A
@@ -615,10 +615,10 @@ def decompress(blob):
 
 
 def compress_file(src, dst, eb, mode="rel", dims=None, dtype=np.float32):
-    """Compress a raw float32 or float64 file into an FSZ container on disk.
+    """Compress a raw float32 or float64 file into an SZ-GPU container on disk.
 
     ``src`` is read as a flat stream of values in ``dtype``, the layout that
-    raw binary dumps and the ``fsz`` command line tool use. Pass ``dims`` to
+    raw binary dumps and the ``szgpu`` command line tool use. Pass ``dims`` to
     record the shape in the header so :func:`decompress_file` hands the array
     back in its original form.
 
@@ -648,7 +648,7 @@ def compress_file(src, dst, eb, mode="rel", dims=None, dtype=np.float32):
     dtype = np.dtype(dtype)
     if dtype != np.float32 and dtype != np.float64:
         raise TypeError(
-            "FSZ compresses float32 and float64 data, but dtype is %s." % dtype
+            "SZ-GPU compresses float32 and float64 data, but dtype is %s." % dtype
         )
 
     arr = np.fromfile(src, dtype=dtype)
@@ -683,11 +683,11 @@ def compress_file(src, dst, eb, mode="rel", dims=None, dtype=np.float32):
 
 
 def decompress_file(src, dst=None):
-    """Reconstruct the array in an FSZ container file.
+    """Reconstruct the array in an SZ-GPU container file.
 
     Args:
         src: path of the container written by :func:`compress_file` or by the
-            ``fsz`` command line tool.
+            ``szgpu`` command line tool.
         dst: optional path for the reconstructed data, written raw in C order,
             in the element type the container records.
 
@@ -696,7 +696,7 @@ def decompress_file(src, dst=None):
         the container, float32 or float64.
 
     Raises:
-        ValueError: if the file is not a readable FSZ container.
+        ValueError: if the file is not a readable SZ-GPU container.
         RuntimeError: if the library reports a failure.
     """
     with open(src, "rb") as f:

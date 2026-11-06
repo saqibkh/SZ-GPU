@@ -1,4 +1,4 @@
-#include "fsz/fsz.hpp"
+#include "szgpu/szgpu.hpp"
 
 #include <cuda_runtime.h>
 #include <cmath>
@@ -16,12 +16,12 @@ static int run_case(std::size_t n, float eb, const char* label) {
     unsigned char* d_cmp = nullptr;
     cudaMalloc(&d_in,  n * sizeof(float));
     cudaMalloc(&d_out, n * sizeof(float));
-    cudaMalloc(&d_cmp, fsz::max_compressed_bytes(n));
+    cudaMalloc(&d_cmp, szgpu::max_compressed_bytes(n));
     cudaMemcpy(d_in, h_in.data(), n * sizeof(float), cudaMemcpyHostToDevice);
 
-    fsz::Workspace ws(n);
-    auto r = fsz::compress(d_in, d_cmp, n, eb, ws);
-    fsz::decompress(d_out, d_cmp, n, eb, r, ws);
+    szgpu::Workspace ws(n);
+    auto r = szgpu::compress(d_in, d_cmp, n, eb, ws);
+    szgpu::decompress(d_out, d_cmp, n, eb, r, ws);
     cudaDeviceSynchronize();
 
     std::vector<float> h_out(n);
@@ -52,12 +52,12 @@ static int run_case_f64(std::size_t n, double eb, const char* label) {
     unsigned char* d_cmp = nullptr;
     cudaMalloc(&d_in,  n * sizeof(double));
     cudaMalloc(&d_out, n * sizeof(double));
-    cudaMalloc(&d_cmp, fsz::max_compressed_bytes(n));
+    cudaMalloc(&d_cmp, szgpu::max_compressed_bytes(n));
     cudaMemcpy(d_in, h_in.data(), n * sizeof(double), cudaMemcpyHostToDevice);
 
-    fsz::Workspace ws(n);
-    auto r = fsz::compress(d_in, d_cmp, n, eb, ws);
-    fsz::decompress(d_out, d_cmp, n, eb, r, ws);
+    szgpu::Workspace ws(n);
+    auto r = szgpu::compress(d_in, d_cmp, n, eb, ws);
+    szgpu::decompress(d_out, d_cmp, n, eb, r, ws);
     cudaDeviceSynchronize();
 
     std::vector<double> h_out(n);

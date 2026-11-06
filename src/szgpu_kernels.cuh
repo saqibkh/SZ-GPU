@@ -1,12 +1,12 @@
-#ifndef FSZ_KERNELS_CUH
-#define FSZ_KERNELS_CUH
+#ifndef SZGPU_KERNELS_CUH
+#define SZGPU_KERNELS_CUH
 
-#include "fsz_internal.cuh"
+#include "szgpu_internal.cuh"
 
-namespace fsz_detail {
+namespace szgpu_detail {
 
 template <int TILES_PER_THREAD, typename FpT>
-__global__ void fsz_compress_kernel_T(
+__global__ void szgpu_compress_kernel_T(
     const FpT* __restrict__ oriData,
     unsigned char* __restrict__ cmpData,
     volatile unsigned int* __restrict__ cmpOffset,
@@ -18,7 +18,7 @@ __global__ void fsz_compress_kernel_T(
     __shared__ unsigned int excl_sum;
     __shared__ unsigned int base_idx;
     const int tid = threadIdx.x;
-    const int idx = blockIdx.x * FSZ_TBLOCK_SZ + tid;
+    const int idx = blockIdx.x * SZGPU_TBLOCK_SZ + tid;
     const int lane = idx & 0x1f;
     const int warp = idx >> 5;
     if (!tid) { excl_sum = 0; base_idx = 0; }
@@ -26,8 +26,8 @@ __global__ void fsz_compress_kernel_T(
 
     const FpT recipPrec = (FpT)0.5f / eb;
     const int TPT = TILES_PER_THREAD;
-    const int BN = TPT * FSZ_BLKS_PER_TILE;
-    const int baseTile = (warp * FSZ_WARP_SZ + lane) * TPT;
+    const int BN = TPT * SZGPU_BLKS_PER_TILE;
+    const int baseTile = (warp * SZGPU_WARP_SZ + lane) * TPT;
 
     int fixed_rate[BN];
     int tile_mean_q[TPT];
@@ -37,7 +37,7 @@ __global__ void fsz_compress_kernel_T(
 
     for (int t = 0; t < TPT; t++) {
         int tileId = baseTile + t;
-        size_t tBase = (size_t)tileId * FSZ_TILE_SIZE;
+        size_t tBase = (size_t)tileId * SZGPU_TILE_SIZE;
 
         if (tileId < (int)numTiles) {
             FpT fsum = (FpT)0.0f;
@@ -48,23 +48,23 @@ __global__ void fsz_compress_kernel_T(
             int blk0_d1_nomean_lz2 = 0;
             int blk0_max_2_31_lz2 = 0;
             int blk0_max_1_31_lz1 = 0;
-            int lz1_rate_t[FSZ_BLKS_PER_TILE], lz2_rate_t[FSZ_BLKS_PER_TILE];
-            int lz1_pb1_t[FSZ_BLKS_PER_TILE];
-            int lz2_pb1_t[FSZ_BLKS_PER_TILE], lz2_pb2_t[FSZ_BLKS_PER_TILE];
+            int lz1_rate_t[SZGPU_BLKS_PER_TILE], lz2_rate_t[SZGPU_BLKS_PER_TILE];
+            int lz1_pb1_t[SZGPU_BLKS_PER_TILE];
+            int lz2_pb1_t[SZGPU_BLKS_PER_TILE], lz2_pb2_t[SZGPU_BLKS_PER_TILE];
 
-            for (int blk = 0; blk < FSZ_BLKS_PER_TILE; blk++) {
-                size_t bBase = tBase + blk * FSZ_BLK_DIM;
+            for (int blk = 0; blk < SZGPU_BLKS_PER_TILE; blk++) {
+                size_t bBase = tBase + blk * SZGPU_BLK_DIM;
                 lz1_pb1_t[blk] = prev1_lz1;
                 lz2_pb1_t[blk] = prev1_lz2;
                 lz2_pb2_t[blk] = prev2_lz2;
 
                 int lz1Max = 0, lz2Max = 0;
-                for (int k = 0; k < FSZ_BLK_DIM; k += 4) {
-                    auto v4 = fsz_load4(oriData, bBase + k, nbEle);
+                for (int k = 0; k < SZGPU_BLK_DIM; k += 4) {
+                    auto v4 = szgpu_load4(oriData, bBase + k, nbEle);
                     fsum += v4.x + v4.y + v4.z + v4.w;
                     FpT fv[4] = {v4.x, v4.y, v4.z, v4.w};
                     for (int kk = 0; kk < 4; kk++) {
-                        int q = fsz_quantize(fv[kk], recipPrec);
+                        int q = szgpu_quantize(fv[kk], recipPrec);
                         int d1 = q - prev1_lz1;
                         prev1_lz1 = q;
                         int a1 = d1 < 0 ? -d1 : d1;
@@ -83,19 +83,19 @@ __global__ void fsz_compress_kernel_T(
                         }
                     }
                 }
-                int lz1r = fsz_bitnum((unsigned int)lz1Max);
+                int lz1r = szgpu_bitnum((unsigned int)lz1Max);
                 if (lz1r > 31) lz1r = 31;
                 lz1_rate_t[blk] = lz1r;
-                int lz2r = fsz_bitnum((unsigned int)lz2Max);
+                int lz2r = szgpu_bitnum((unsigned int)lz2Max);
                 if (lz2r > 31) lz2r = 31;
                 lz2_rate_t[blk] = lz2r;
             }
 
-            int mean_q = fsz_quantize(fsum / (FpT)FSZ_TILE_SIZE, recipPrec);
+            int mean_q = szgpu_quantize(fsum / (FpT)SZGPU_TILE_SIZE, recipPrec);
             int lz1_d0_mean = blk0_q0 - mean_q;
             int lz1_ad0_mean = lz1_d0_mean < 0 ? -lz1_d0_mean : lz1_d0_mean;
             int lz1_max0_mean = lz1_ad0_mean > blk0_max_1_31_lz1 ? lz1_ad0_mean : blk0_max_1_31_lz1;
-            int lz1_rate0_mean = fsz_bitnum((unsigned int)lz1_max0_mean);
+            int lz1_rate0_mean = szgpu_bitnum((unsigned int)lz1_max0_mean);
             if (lz1_rate0_mean > 31) lz1_rate0_mean = 31;
             int lz1_rate0_nomean = lz1_rate_t[0];
 
@@ -106,12 +106,12 @@ __global__ void fsz_compress_kernel_T(
             int lz2_max0_mean = lz2_ad0_mean;
             lz2_max0_mean = lz2_max0_mean > lz2_ad1_mean ? lz2_max0_mean : lz2_ad1_mean;
             lz2_max0_mean = lz2_max0_mean > blk0_max_2_31_lz2 ? lz2_max0_mean : blk0_max_2_31_lz2;
-            int lz2_rate0_mean = fsz_bitnum((unsigned int)lz2_max0_mean);
+            int lz2_rate0_mean = szgpu_bitnum((unsigned int)lz2_max0_mean);
             if (lz2_rate0_mean > 31) lz2_rate0_mean = 31;
             int lz2_rate0_nomean = lz2_rate_t[0];
 
             int lz1_blks17 = 0, lz2_blks17 = 0;
-            for (int b = 1; b < FSZ_BLKS_PER_TILE; b++) {
+            for (int b = 1; b < SZGPU_BLKS_PER_TILE; b++) {
                 lz1_blks17 += lz1_rate_t[b] ? (4 + lz1_rate_t[b] * 4) : 0;
                 lz2_blks17 += lz2_rate_t[b] ? (4 + lz2_rate_t[b] * 4) : 0;
             }
@@ -138,16 +138,16 @@ __global__ void fsz_compress_kernel_T(
 
             int chosen_rate0 = use_lz2 ? (use_mean ? lz2_rate0_mean : lz2_rate0_nomean)
                                        : (use_mean ? lz1_rate0_mean : lz1_rate0_nomean);
-            int rate_byte_0 = chosen_rate0 | (use_lz2 ? FSZ_LZ2_FLAG : 0) | (use_mean ? FSZ_MEAN_FLAG : 0);
-            int bIdx0 = t * FSZ_BLKS_PER_TILE;
+            int rate_byte_0 = chosen_rate0 | (use_lz2 ? SZGPU_LZ2_FLAG : 0) | (use_mean ? SZGPU_MEAN_FLAG : 0);
+            int bIdx0 = t * SZGPU_BLKS_PER_TILE;
             fixed_rate[bIdx0] = rate_byte_0;
-            cmpData[tileId * FSZ_BLKS_PER_TILE] = (unsigned char)rate_byte_0;
+            cmpData[tileId * SZGPU_BLKS_PER_TILE] = (unsigned char)rate_byte_0;
 
-            for (int b = 1; b < FSZ_BLKS_PER_TILE; b++) {
-                int bIdx = t * FSZ_BLKS_PER_TILE + b;
+            for (int b = 1; b < SZGPU_BLKS_PER_TILE; b++) {
+                int bIdx = t * SZGPU_BLKS_PER_TILE + b;
                 int rate = use_lz2 ? lz2_rate_t[b] : lz1_rate_t[b];
                 fixed_rate[bIdx] = rate;
-                cmpData[tileId * FSZ_BLKS_PER_TILE + b] = (unsigned char)rate;
+                cmpData[tileId * SZGPU_BLKS_PER_TILE + b] = (unsigned char)rate;
             }
 
             tile_mean_q[t] = use_mean ? mean_q : 0;
@@ -157,8 +157,8 @@ __global__ void fsz_compress_kernel_T(
             tile_use_lz2[t] = false;
             tile_use_mean[t] = false;
             tile_mean_q[t] = 0;
-            for (int blk = 0; blk < FSZ_BLKS_PER_TILE; blk++) {
-                int bIdx = t * FSZ_BLKS_PER_TILE + blk;
+            for (int blk = 0; blk < SZGPU_BLKS_PER_TILE; blk++) {
+                int bIdx = t * SZGPU_BLKS_PER_TILE + blk;
                 fixed_rate[bIdx] = 0;
             }
         }
@@ -211,8 +211,8 @@ __global__ void fsz_compress_kernel_T(
     int prev_tile = -1;
 
     for (int j = 0; j < BN; j++) {
-        int t = j / FSZ_BLKS_PER_TILE;
-        int blk = j % FSZ_BLKS_PER_TILE;
+        int t = j / SZGPU_BLKS_PER_TILE;
+        int blk = j % SZGPU_BLKS_PER_TILE;
         bool use_lz2 = tile_use_lz2[t];
         bool mean_enabled = tile_use_mean[t];
         int mean_q = tile_mean_q[t];
@@ -222,7 +222,7 @@ __global__ void fsz_compress_kernel_T(
             prev_tile = t;
         }
 
-        int rate = fixed_rate[j] & FSZ_RATE_MASK;
+        int rate = fixed_rate[j] & SZGPU_RATE_MASK;
         unsigned int tmp_byte = rate ? (4 + rate * 4) : 0;
         if (blk == 0 && mean_enabled) tmp_byte += (unsigned int)sizeof(FpT);
 
@@ -238,23 +238,23 @@ __global__ void fsz_compress_kernel_T(
 
         if (rate || (blk == 0 && mean_enabled)) {
             if (blk == 0 && mean_enabled) {
-                FpT mu = fsz_mean_value(mean_q, eb);
-                fsz_write_mean(cmpData, cmp_ofs, mu);
+                FpT mu = szgpu_mean_value(mean_q, eb);
+                szgpu_write_mean(cmpData, cmp_ofs, mu);
                 cmp_ofs += (unsigned int)sizeof(FpT);
             }
 
             if (rate) {
-                int absQ[FSZ_BLK_DIM];
+                int absQ[SZGPU_BLK_DIM];
                 unsigned int sf = 0;
 
-                size_t bBase = (size_t)(baseTile + t) * FSZ_TILE_SIZE + blk * FSZ_BLK_DIM;
+                size_t bBase = (size_t)(baseTile + t) * SZGPU_TILE_SIZE + blk * SZGPU_BLK_DIM;
                 int p1 = enc_p1;
                 int p2 = enc_p2;
-                for (int k = 0; k < FSZ_BLK_DIM; k += 4) {
-                    auto v4 = fsz_load4(oriData, bBase + k, nbEle);
+                for (int k = 0; k < SZGPU_BLK_DIM; k += 4) {
+                    auto v4 = szgpu_load4(oriData, bBase + k, nbEle);
                     FpT fv[4] = {v4.x, v4.y, v4.z, v4.w};
                     for (int kk = 0; kk < 4; kk++) {
-                        int q = fsz_quantize(fv[kk], recipPrec) - mean_q;
+                        int q = szgpu_quantize(fv[kk], recipPrec) - mean_q;
                         int delta;
                         if (use_lz2) {
                             delta = q - 2 * p1 + p2;
@@ -318,7 +318,7 @@ __global__ void fsz_compress_kernel_T(
 }
 
 template <int TILES_PER_THREAD, typename FpT>
-__global__ void fsz_decompress_kernel_T(
+__global__ void szgpu_decompress_kernel_T(
     FpT* __restrict__ decData,
     const unsigned char* __restrict__ cmpData,
     volatile unsigned int* __restrict__ cmpOffset,
@@ -330,27 +330,27 @@ __global__ void fsz_decompress_kernel_T(
     __shared__ unsigned int excl_sum;
     __shared__ unsigned int base_idx;
     const int tid = threadIdx.x;
-    const int idx = blockIdx.x * FSZ_TBLOCK_SZ + tid;
+    const int idx = blockIdx.x * SZGPU_TBLOCK_SZ + tid;
     const int lane = idx & 0x1f;
     const int warp = idx >> 5;
     if (!tid) { excl_sum = 0; base_idx = 0; }
     __syncthreads();
 
     const int TPT = TILES_PER_THREAD;
-    const int BN = TPT * FSZ_BLKS_PER_TILE;
-    const int baseTile = (warp * FSZ_WARP_SZ + lane) * TPT;
+    const int BN = TPT * SZGPU_BLKS_PER_TILE;
+    const int baseTile = (warp * SZGPU_WARP_SZ + lane) * TPT;
 
     int fixed_rate[BN];
     unsigned int thread_ofs = 0;
     for (int j = 0; j < BN; j++) {
-        int t = j / FSZ_BLKS_PER_TILE, blk = j % FSZ_BLKS_PER_TILE;
+        int t = j / SZGPU_BLKS_PER_TILE, blk = j % SZGPU_BLKS_PER_TILE;
         int tileId = baseTile + t;
         if (tileId < (int)numTiles) {
-            int rate_byte = cmpData[tileId * FSZ_BLKS_PER_TILE + blk];
+            int rate_byte = cmpData[tileId * SZGPU_BLKS_PER_TILE + blk];
             fixed_rate[j] = rate_byte;
-            int rate = rate_byte & FSZ_RATE_MASK;
+            int rate = rate_byte & SZGPU_RATE_MASK;
             thread_ofs += rate ? (4 + rate * 4) : 0;
-            if (blk == 0 && (rate_byte & FSZ_MEAN_FLAG)) thread_ofs += (unsigned int)sizeof(FpT);
+            if (blk == 0 && (rate_byte & SZGPU_MEAN_FLAG)) thread_ofs += (unsigned int)sizeof(FpT);
         } else {
             fixed_rate[j] = 0;
         }
@@ -406,20 +406,20 @@ __global__ void fsz_decompress_kernel_T(
     bool mean_enabled = false;
 
     for (int j = 0; j < BN; j++) {
-        int t = j / FSZ_BLKS_PER_TILE;
-        int blk = j % FSZ_BLKS_PER_TILE;
+        int t = j / SZGPU_BLKS_PER_TILE;
+        int blk = j % SZGPU_BLKS_PER_TILE;
 
         if (t != cur_tile) {
             cur_tile = t;
             p1 = 0; p2 = 0;
             mu = (FpT)0.0f;
-            int rate_byte_0 = fixed_rate[t * FSZ_BLKS_PER_TILE];
-            use_lz2 = (rate_byte_0 & FSZ_LZ2_FLAG) != 0;
-            mean_enabled = (rate_byte_0 & FSZ_MEAN_FLAG) != 0;
+            int rate_byte_0 = fixed_rate[t * SZGPU_BLKS_PER_TILE];
+            use_lz2 = (rate_byte_0 & SZGPU_LZ2_FLAG) != 0;
+            mean_enabled = (rate_byte_0 & SZGPU_MEAN_FLAG) != 0;
         }
 
         int rate_byte = fixed_rate[j];
-        int rate = rate_byte & FSZ_RATE_MASK;
+        int rate = rate_byte & SZGPU_RATE_MASK;
 
         unsigned int tmp_byte = rate ? (4 + rate * 4) : 0;
         if (blk == 0 && mean_enabled) tmp_byte += (unsigned int)sizeof(FpT);
@@ -435,7 +435,7 @@ __global__ void fsz_decompress_kernel_T(
         else cmp_ofs = base_cmp + cur_ofs + prev_thr;
 
         if (blk == 0 && mean_enabled) {
-            mu = fsz_read_mean<FpT>(cmpData, cmp_ofs);
+            mu = szgpu_read_mean<FpT>(cmpData, cmp_ofs);
             cmp_ofs += (unsigned int)sizeof(FpT);
         }
 
@@ -443,15 +443,15 @@ __global__ void fsz_decompress_kernel_T(
 
         if (rate == 0) {
             if (tileId < (int)numTiles) {
-                size_t bBase = (size_t)tileId * FSZ_TILE_SIZE + blk * FSZ_BLK_DIM;
+                size_t bBase = (size_t)tileId * SZGPU_TILE_SIZE + blk * SZGPU_BLK_DIM;
                 if (use_lz2) {
                     FpT f_stride = (FpT)(p1 - p2) * step;
                     FpT f_base   = (FpT)(2*p1 - p2) * step + mu;
                     if (!(skipZeroWrites && f_base == (FpT)0.0f && f_stride == (FpT)0.0f)) {
                         size_t gi = bBase;
-                        for (int k = 0; k < FSZ_BLK_DIM; k += 4) {
+                        for (int k = 0; k < SZGPU_BLK_DIM; k += 4) {
                             if (gi + 3 < nbEle) {
-                                fsz_store4(decData, gi,
+                                szgpu_store4(decData, gi,
                                            f_base + (FpT)(k)   * f_stride,
                                            f_base + (FpT)(k+1) * f_stride,
                                            f_base + (FpT)(k+2) * f_stride,
@@ -471,9 +471,9 @@ __global__ void fsz_decompress_kernel_T(
                     FpT fill_val = (FpT)p1 * step + mu;
                     if (!(skipZeroWrites && fill_val == (FpT)0.0f)) {
                         size_t gi = bBase;
-                        for (int k = 0; k < FSZ_BLK_DIM; k += 4) {
+                        for (int k = 0; k < SZGPU_BLK_DIM; k += 4) {
                             if (gi + 3 < nbEle) {
-                                fsz_store4(decData, gi,
+                                szgpu_store4(decData, gi,
                                            fill_val, fill_val, fill_val, fill_val);
                             } else {
                                 for (int kk = 0; kk < 4 && gi+kk < nbEle; kk++)
@@ -485,17 +485,17 @@ __global__ void fsz_decompress_kernel_T(
                 }
             }
         } else {
-            uchar4 sc = fsz_ldg_uchar4(cmpData, cmp_ofs);
+            uchar4 sc = szgpu_ldg_uchar4(cmpData, cmp_ofs);
             unsigned int signs = ((unsigned int)sc.x << 24) | ((unsigned int)sc.y << 16) |
                                  ((unsigned int)sc.z << 8) | (unsigned int)sc.w;
             unsigned int cd = cmp_ofs + 4;
 
-            int mag[FSZ_BLK_DIM];
+            int mag[SZGPU_BLK_DIM];
             #pragma unroll
-            for (int k = 0; k < FSZ_BLK_DIM; k++) mag[k] = 0;
+            for (int k = 0; k < SZGPU_BLK_DIM; k++) mag[k] = 0;
 
             for (int b = 0; b < rate; b++) {
-                uchar4 bc = fsz_ldg_uchar4(cmpData, cd);
+                uchar4 bc = szgpu_ldg_uchar4(cmpData, cd);
                 cd += 4;
                 #pragma unroll
                 for (int k = 0; k < 8; k++) mag[k]    |= ((int)((bc.x >> (7-k)) & 1)) << b;
@@ -507,25 +507,25 @@ __global__ void fsz_decompress_kernel_T(
                 for (int k = 0; k < 8; k++) mag[24+k] |= ((int)((bc.w >> (7-k)) & 1)) << b;
             }
 
-            int vals[FSZ_BLK_DIM];
-            for (int k = 0; k < FSZ_BLK_DIM; k++)
+            int vals[SZGPU_BLK_DIM];
+            for (int k = 0; k < SZGPU_BLK_DIM; k++)
                 vals[k] = (signs & (1u << (31-k))) ? -mag[k] : mag[k];
 
             if (use_lz2) {
-                for (int k = 0; k < FSZ_BLK_DIM; k++) {
+                for (int k = 0; k < SZGPU_BLK_DIM; k++) {
                     int q = 2*p1 - p2 + vals[k]; p2 = p1; p1 = q; vals[k] = q;
                 }
             } else {
-                for (int k = 0; k < FSZ_BLK_DIM; k++) {
+                for (int k = 0; k < SZGPU_BLK_DIM; k++) {
                     int q = p1 + vals[k]; p1 = q; vals[k] = q;
                 }
             }
             if (tileId < (int)numTiles) {
-                size_t bBase = (size_t)tileId * FSZ_TILE_SIZE + blk * FSZ_BLK_DIM;
-                for (int k = 0; k < FSZ_BLK_DIM; k += 4) {
+                size_t bBase = (size_t)tileId * SZGPU_TILE_SIZE + blk * SZGPU_BLK_DIM;
+                for (int k = 0; k < SZGPU_BLK_DIM; k += 4) {
                     size_t gi = bBase + k;
                     if (gi + 3 < nbEle) {
-                        fsz_store4(decData, gi,
+                        szgpu_store4(decData, gi,
                                    (FpT)vals[k]   * step + mu,
                                    (FpT)vals[k+1] * step + mu,
                                    (FpT)vals[k+2] * step + mu,

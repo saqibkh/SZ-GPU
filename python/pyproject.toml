@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fsz"
-version = "1.0.0"
-description = "Python bindings for the FSZ GPU error-bounded lossy compressor"
+name = "szgpu"
+version = "1.0.1"
+description = "Python bindings for the SZ-GPU error-bounded lossy compressor"
 requires-python = ">=3.8"
 license = "BSD-3-Clause"
 dependencies = ["numpy"]
@@ -18,4 +18,4 @@ classifiers = [
 ]
 
 [tool.setuptools]
-packages = ["fsz"]
+packages = ["szgpu"]

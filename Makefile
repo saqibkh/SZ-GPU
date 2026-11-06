@@ -28,13 +28,13 @@ GENCODE   += -maxrregcount=96
 endif
 
 INCLUDE   := -Iinclude -Isrc
-SRC       := src/fsz.cu
-HDRS      := include/fsz/fsz.h include/fsz/fsz.hpp src/fsz_internal.cuh src/fsz_kernels.cuh
+SRC       := src/szgpu.cu
+HDRS      := include/szgpu/szgpu.h include/szgpu/szgpu.hpp src/szgpu_internal.cuh src/szgpu_kernels.cuh
 
 BUILD     ?= build
-LIB       := $(BUILD)/libfsz.a
-SHLIB     := $(BUILD)/libfsz.so
-TOOL      := $(BUILD)/fsz
+LIB       := $(BUILD)/libszgpu.a
+SHLIB     := $(BUILD)/libszgpu.so
+TOOL      := $(BUILD)/szgpu
 EXAMPLES  := $(BUILD)/example_roundtrip $(BUILD)/example_hostptr
 TESTS     := $(BUILD)/test_roundtrip $(BUILD)/test_hostptr
 
@@ -45,10 +45,10 @@ all: lib tool examples tests
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/fsz.o: $(SRC) $(HDRS) | $(BUILD)
+$(BUILD)/szgpu.o: $(SRC) $(HDRS) | $(BUILD)
 	$(NVCC) $(CXXFLAGS) $(GENCODE) -c $(SRC) -o $@ $(INCLUDE) -Xcompiler -fPIC
 
-$(LIB): $(BUILD)/fsz.o
+$(LIB): $(BUILD)/szgpu.o
 	ar rcs $@ $<
 
 $(SHLIB): $(SRC) $(HDRS) | $(BUILD)
@@ -57,7 +57,7 @@ $(SHLIB): $(SRC) $(HDRS) | $(BUILD)
 lib: $(LIB)
 shared: $(SHLIB)
 
-$(TOOL): tools/fsz.cu tools/fsz_file_format.hpp $(LIB)
+$(TOOL): tools/szgpu.cu tools/szgpu_file_format.hpp $(LIB)
 	$(NVCC) $(CXXFLAGS) $(GENCODE) $< -o $@ $(INCLUDE) -Itools $(LIB)
 
 tool: $(TOOL)
@@ -71,7 +71,7 @@ $(BUILD)/test_%: tests/test_%.cu $(LIB)
 examples: $(EXAMPLES)
 tests:    $(TESTS)
 
-# Fortran interface (optional): builds the fsz module plus its example and
+# Fortran interface (optional): builds the szgpu module plus its example and
 # test against the static library. Requires gfortran or a compatible FC.
 ifeq ($(origin FC),default)
 FC        := gfortran
@@ -79,18 +79,18 @@ endif
 CUDA_HOME ?= $(shell dirname $$(dirname $$(command -v nvcc)))
 
 fortran: $(LIB) | $(BUILD)
-	$(FC) -O2 -J$(BUILD) -c fortran/fsz.f90 -o $(BUILD)/fsz_mod.o
-	$(FC) -O2 -I$(BUILD) fortran/example_fsz.f90 $(BUILD)/fsz_mod.o $(LIB) \
+	$(FC) -O2 -J$(BUILD) -c fortran/szgpu.f90 -o $(BUILD)/szgpu_mod.o
+	$(FC) -O2 -I$(BUILD) fortran/example_szgpu.f90 $(BUILD)/szgpu_mod.o $(LIB) \
 	    -o $(BUILD)/example_fortran -L$(CUDA_HOME)/lib64 -lcudart -lstdc++
-	$(FC) -O2 -I$(BUILD) fortran/test_fsz.f90 $(BUILD)/fsz_mod.o $(LIB) \
+	$(FC) -O2 -I$(BUILD) fortran/test_szgpu.f90 $(BUILD)/szgpu_mod.o $(LIB) \
 	    -o $(BUILD)/test_fortran -L$(CUDA_HOME)/lib64 -lcudart -lstdc++
 
 PREFIX ?= /usr/local
 install: $(LIB) $(TOOL)
-	install -d $(PREFIX)/bin $(PREFIX)/lib $(PREFIX)/include/fsz
+	install -d $(PREFIX)/bin $(PREFIX)/lib $(PREFIX)/include/szgpu
 	install -m 755 $(TOOL) $(PREFIX)/bin/
 	install -m 644 $(LIB) $(PREFIX)/lib/
-	install -m 644 include/fsz/fsz.h include/fsz/fsz.hpp $(PREFIX)/include/fsz/
+	install -m 644 include/szgpu/szgpu.h include/szgpu/szgpu.hpp $(PREFIX)/include/szgpu/
 
 clean:
 	rm -rf $(BUILD)

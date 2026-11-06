@@ -1,7 +1,7 @@
-program test_fsz
+program test_szgpu
     use iso_c_binding, only: c_size_t, c_int, c_int8_t, c_ptr, c_loc, c_null_ptr, &
                              c_float, c_associated
-    use fsz
+    use szgpu
     implicit none
 
     interface
@@ -61,12 +61,12 @@ contains
         do i = 1, n
             a(i) = sin(0.0017 * real(i)) + 0.05 * cos(0.13 * real(i))
         end do
-        allocate(cmp(fsz_max_compressed_bytes(n)))
-        call fsz_compress(a, n, eb, cmp, cmp_size, ierr)
-        call check('compress-r4', ierr == FSZ_OK .and. cmp_size > 0)
+        allocate(cmp(szgpu_max_compressed_bytes(n)))
+        call szgpu_compress(a, n, eb, cmp, cmp_size, ierr)
+        call check('compress-r4', ierr == SZGPU_OK .and. cmp_size > 0)
         b = 0.0
-        call fsz_decompress(b, cmp, cmp_size, n, eb, ierr)
-        call check('roundtrip-r4', ierr == FSZ_OK .and. &
+        call szgpu_decompress(b, cmp, cmp_size, n, eb, ierr)
+        call check('roundtrip-r4', ierr == SZGPU_OK .and. &
                    maxval(abs(a - b)) <= 1.01 * eb)
         print '(a,f0.3)', '  ratio r4: ', real(n) * 4.0 / real(cmp_size)
     end subroutine gate_r4
@@ -82,12 +82,12 @@ contains
         do i = 1, n
             a(i) = sin(0.0017d0 * real(i, 8)) + 0.05d0 * cos(0.13d0 * real(i, 8))
         end do
-        allocate(cmp(fsz_max_compressed_bytes(n)))
-        call fsz_compress(a, n, eb, cmp, cmp_size, ierr)
-        call check('compress-r8', ierr == FSZ_OK .and. cmp_size > 0)
+        allocate(cmp(szgpu_max_compressed_bytes(n)))
+        call szgpu_compress(a, n, eb, cmp, cmp_size, ierr)
+        call check('compress-r8', ierr == SZGPU_OK .and. cmp_size > 0)
         b = 0.0d0
-        call fsz_decompress(b, cmp, cmp_size, n, eb, ierr)
-        call check('roundtrip-r8', ierr == FSZ_OK .and. &
+        call szgpu_decompress(b, cmp, cmp_size, n, eb, ierr)
+        call check('roundtrip-r8', ierr == SZGPU_OK .and. &
                    maxval(abs(a - b)) <= 1.01d0 * eb)
         print '(a,f0.3)', '  ratio r8: ', real(n) * 8.0 / real(cmp_size)
     end subroutine gate_r8
@@ -102,12 +102,12 @@ contains
         do i = 1, n
             a(i) = sin(0.05 * real(i)) + 0.2 * cos(0.31 * real(i))
         end do
-        allocate(cmp(fsz_max_compressed_bytes(n)))
-        call fsz_compress(a, n, eb, cmp, cmp_size, ierr)
+        allocate(cmp(szgpu_max_compressed_bytes(n)))
+        call szgpu_compress(a, n, eb, cmp, cmp_size, ierr)
         b = 0.0
-        call fsz_decompress(b, cmp, cmp_size, n, eb, ierr)
-        call check('small-array', ierr == FSZ_OK .and. &
-                   cmp_size > fsz_num_tiles(n) * 8 .and. &
+        call szgpu_decompress(b, cmp, cmp_size, n, eb, ierr)
+        call check('small-array', ierr == SZGPU_OK .and. &
+                   cmp_size > szgpu_num_tiles(n) * 8 .and. &
                    maxval(abs(a - b)) <= 1.01 * eb)
     end subroutine gate_small
 
@@ -127,11 +127,11 @@ contains
             end do
         end do
         n = int(nx, c_size_t) * ny * nz
-        allocate(cmp(fsz_max_compressed_bytes(n)))
-        call fsz_compress(a, n, eb, cmp, cmp_size, ierr)
+        allocate(cmp(szgpu_max_compressed_bytes(n)))
+        call szgpu_compress(a, n, eb, cmp, cmp_size, ierr)
         b = 0.0
-        call fsz_decompress(b, cmp, cmp_size, n, eb, ierr)
-        call check('rank-3', ierr == FSZ_OK .and. &
+        call szgpu_decompress(b, cmp, cmp_size, n, eb, ierr)
+        call check('rank-3', ierr == SZGPU_OK .and. &
                    maxval(abs(a - b)) <= 1.01 * eb)
     end subroutine gate_rank3
 
@@ -141,9 +141,9 @@ contains
         integer(c_size_t) :: cmp_size
         integer(c_int) :: ierr
         a = 1.0
-        call fsz_compress(a, 16_c_size_t, 0.0, cmp, cmp_size, ierr)
-        call check('error-status', ierr /= FSZ_OK .and. &
-                   len(fsz_status_message(ierr)) > 0)
+        call szgpu_compress(a, 16_c_size_t, 0.0, cmp, cmp_size, ierr)
+        call check('error-status', ierr /= SZGPU_OK .and. &
+                   len(szgpu_status_message(ierr)) > 0)
     end subroutine gate_error
 
     subroutine gate_device()
@@ -153,7 +153,7 @@ contains
         integer(c_size_t) :: host_size, cap, i
         integer(c_int) :: ierr, cst
         type(c_ptr) :: d_in, d_out, d_cmp, ws
-        type(fsz_result) :: res
+        type(szgpu_result) :: res
         real(4), parameter :: eb = 1.0e-3
 
         allocate(a(n), b(n))
@@ -161,10 +161,10 @@ contains
             a(i) = sin(0.0017 * real(i)) + 0.05 * cos(0.13 * real(i))
         end do
 
-        cap = fsz_max_compressed_bytes(n)
+        cap = szgpu_max_compressed_bytes(n)
         allocate(cmp_host(cap))
-        call fsz_compress(a, n, eb, cmp_host, host_size, ierr)
-        call check('device-setup-host', ierr == FSZ_OK)
+        call szgpu_compress(a, n, eb, cmp_host, host_size, ierr)
+        call check('device-setup-host', ierr == SZGPU_OK)
 
         cst = cudaMalloc(d_in,  n * 4_c_size_t)
         if (cst /= 0) then
@@ -176,30 +176,30 @@ contains
         cst = cudaMemcpy(d_in, c_loc(a), n * 4_c_size_t, H2D)
         call check('device-h2d', cst == 0)
 
-        call fsz_workspace_create(ws, n, ierr)
-        call check('workspace-create', ierr == FSZ_OK .and. c_associated(ws) .and. &
-                   fsz_workspace_capacity(ws) == n)
+        call szgpu_workspace_create(ws, n, ierr)
+        call check('workspace-create', ierr == SZGPU_OK .and. c_associated(ws) .and. &
+                   szgpu_workspace_capacity(ws) == n)
 
-        call fsz_compress_device(d_in, d_cmp, n, eb, ws, res, ierr)
-        call check('compress-device', ierr == FSZ_OK .and. res%cmp_size == host_size)
+        call szgpu_compress_device(d_in, d_cmp, n, eb, ws, res, ierr)
+        call check('compress-device', ierr == SZGPU_OK .and. res%cmp_size == host_size)
 
-        call fsz_decompress_device(d_out, d_cmp, n, eb, res, ws, ierr)
+        call szgpu_decompress_device(d_out, d_cmp, n, eb, res, ws, ierr)
         cst = cudaDeviceSynchronize()
         b = 0.0
         cst = cudaMemcpy(c_loc(b), d_out, n * 4_c_size_t, D2H)
-        call check('decompress-device', ierr == FSZ_OK .and. cst == 0 .and. &
+        call check('decompress-device', ierr == SZGPU_OK .and. cst == 0 .and. &
                    maxval(abs(real(a, 8) - real(b, 8))) <= 1.01d0 * real(eb, 8))
 
         block
-            type(fsz_result) :: res2
-            call fsz_compress_device(d_in, d_cmp, n, eb, c_null_ptr, res2, ierr)
-            call check('compress-device-nullws', ierr == FSZ_OK .and. &
+            type(szgpu_result) :: res2
+            call szgpu_compress_device(d_in, d_cmp, n, eb, c_null_ptr, res2, ierr)
+            call check('compress-device-nullws', ierr == SZGPU_OK .and. &
                        res2%cmp_size == host_size)
         end block
 
         print '(a,i0,a)', '  device stream ', res%cmp_size, ' bytes, matches the host path'
 
-        call fsz_workspace_destroy(ws)
+        call szgpu_workspace_destroy(ws)
         cst = cudaFree(d_in); cst = cudaFree(d_out); cst = cudaFree(d_cmp)
     end subroutine gate_device
 
@@ -214,4 +214,4 @@ contains
         end if
     end subroutine check
 
-end program test_fsz
+end program test_szgpu

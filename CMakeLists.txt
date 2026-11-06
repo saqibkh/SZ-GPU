@@ -5,12 +5,12 @@ cmake_minimum_required(VERSION 3.18)
 # automatically when the CUDA toolkit is new enough to know it.
 if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
     set(CMAKE_CUDA_ARCHITECTURES 80 90)
-    set(_fsz_default_archs ON)
+    set(_szgpu_default_archs ON)
 endif()
 
-project(fsz LANGUAGES CXX CUDA VERSION 1.0.0)
+project(szgpu LANGUAGES CXX CUDA VERSION 1.0.1)
 
-if(_fsz_default_archs AND CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
+if(_szgpu_default_archs AND CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8)
     list(APPEND CMAKE_CUDA_ARCHITECTURES 100)
 endif()
 
@@ -29,126 +29,126 @@ endif()
 
 find_package(CUDAToolkit REQUIRED)
 
-option(FSZ_BUILD_SHARED   "Also build the shared library (libfsz.so)" ON)
-option(FSZ_BUILD_TOOLS    "Build the fsz command-line tool"           ON)
-option(FSZ_BUILD_EXAMPLES "Build FSZ examples"                        ON)
-option(FSZ_BUILD_TESTS    "Build FSZ tests"                           ON)
+option(SZGPU_BUILD_SHARED   "Also build the shared library (libszgpu.so)" ON)
+option(SZGPU_BUILD_TOOLS    "Build the szgpu command-line tool"            ON)
+option(SZGPU_BUILD_EXAMPLES "Build SZ-GPU examples"                         ON)
+option(SZGPU_BUILD_TESTS    "Build SZ-GPU tests"                            ON)
 
-set(FSZ_SOURCES src/fsz.cu)
+set(SZGPU_SOURCES src/szgpu.cu)
 
-# Static library (the default link target, exported as fsz::fsz).
-add_library(fsz STATIC ${FSZ_SOURCES})
-add_library(fsz::fsz ALIAS fsz)
+# Static library (the default link target, exported as szgpu::szgpu).
+add_library(szgpu STATIC ${SZGPU_SOURCES})
+add_library(szgpu::szgpu ALIAS szgpu)
 
 # Shared library for dynamic linking and the Python bindings.
-if(FSZ_BUILD_SHARED)
-    add_library(fsz_shared SHARED ${FSZ_SOURCES})
-    set_target_properties(fsz_shared PROPERTIES OUTPUT_NAME fsz)
+if(SZGPU_BUILD_SHARED)
+    add_library(szgpu_shared SHARED ${SZGPU_SOURCES})
+    set_target_properties(szgpu_shared PROPERTIES OUTPUT_NAME szgpu)
 endif()
 
-foreach(_fsz_lib IN ITEMS fsz fsz_shared)
-    if(NOT TARGET ${_fsz_lib})
+foreach(_szgpu_lib IN ITEMS szgpu szgpu_shared)
+    if(NOT TARGET ${_szgpu_lib})
         continue()
     endif()
-    target_include_directories(${_fsz_lib}
+    target_include_directories(${_szgpu_lib}
         PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                 $<INSTALL_INTERFACE:include>
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    target_link_libraries(${_fsz_lib} PUBLIC CUDA::cudart)
-    set_target_properties(${_fsz_lib} PROPERTIES
+    target_link_libraries(${_szgpu_lib} PUBLIC CUDA::cudart)
+    set_target_properties(${_szgpu_lib} PROPERTIES
         CUDA_SEPARABLE_COMPILATION OFF
         POSITION_INDEPENDENT_CODE  ON)
-    target_compile_options(${_fsz_lib} PRIVATE
+    target_compile_options(${_szgpu_lib} PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-O3>)
 endforeach()
 
-# Command-line tool: the binary is named `fsz`.
-if(FSZ_BUILD_TOOLS)
-    add_executable(fsz_cli tools/fsz.cu)
-    set_target_properties(fsz_cli PROPERTIES OUTPUT_NAME fsz)
-    target_include_directories(fsz_cli PRIVATE tools)
-    target_link_libraries(fsz_cli PRIVATE fsz::fsz)
+# Command-line tool: the binary is named `szgpu`.
+if(SZGPU_BUILD_TOOLS)
+    add_executable(szgpu_cli tools/szgpu.cu)
+    set_target_properties(szgpu_cli PROPERTIES OUTPUT_NAME szgpu)
+    target_include_directories(szgpu_cli PRIVATE tools)
+    target_link_libraries(szgpu_cli PRIVATE szgpu::szgpu)
 endif()
 
-if(FSZ_BUILD_EXAMPLES)
-    add_executable(fsz_example_roundtrip examples/example_roundtrip.cu)
-    target_link_libraries(fsz_example_roundtrip PRIVATE fsz::fsz)
+if(SZGPU_BUILD_EXAMPLES)
+    add_executable(szgpu_example_roundtrip examples/example_roundtrip.cu)
+    target_link_libraries(szgpu_example_roundtrip PRIVATE szgpu::szgpu)
 
-    add_executable(fsz_example_hostptr examples/example_hostptr.cu)
-    target_link_libraries(fsz_example_hostptr PRIVATE fsz::fsz)
+    add_executable(szgpu_example_hostptr examples/example_hostptr.cu)
+    target_link_libraries(szgpu_example_hostptr PRIVATE szgpu::szgpu)
 endif()
 
-if(FSZ_BUILD_TESTS)
+if(SZGPU_BUILD_TESTS)
     enable_testing()
-    add_executable(fsz_test_roundtrip tests/test_roundtrip.cu)
-    target_link_libraries(fsz_test_roundtrip PRIVATE fsz::fsz)
-    add_test(NAME roundtrip COMMAND fsz_test_roundtrip)
+    add_executable(szgpu_test_roundtrip tests/test_roundtrip.cu)
+    target_link_libraries(szgpu_test_roundtrip PRIVATE szgpu::szgpu)
+    add_test(NAME roundtrip COMMAND szgpu_test_roundtrip)
 
-    add_executable(fsz_test_hostptr tests/test_hostptr.cu)
-    target_include_directories(fsz_test_hostptr PRIVATE src)
-    target_link_libraries(fsz_test_hostptr PRIVATE fsz::fsz)
-    add_test(NAME hostptr COMMAND fsz_test_hostptr)
+    add_executable(szgpu_test_hostptr tests/test_hostptr.cu)
+    target_include_directories(szgpu_test_hostptr PRIVATE src)
+    target_link_libraries(szgpu_test_hostptr PRIVATE szgpu::szgpu)
+    add_test(NAME hostptr COMMAND szgpu_test_hostptr)
 endif()
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
 # Fortran interface: built whenever a Fortran compiler is available.
-option(FSZ_BUILD_FORTRAN "Build the Fortran interface" ON)
-if(FSZ_BUILD_FORTRAN)
+option(SZGPU_BUILD_FORTRAN "Build the Fortran interface" ON)
+if(SZGPU_BUILD_FORTRAN)
     include(CheckLanguage)
     check_language(Fortran)
     if(CMAKE_Fortran_COMPILER)
         enable_language(Fortran)
-        add_library(fsz_fortran STATIC fortran/fsz.f90)
-        target_link_libraries(fsz_fortran PUBLIC fsz::fsz stdc++)
-        set_target_properties(fsz_fortran PROPERTIES
+        add_library(szgpu_fortran STATIC fortran/szgpu.f90)
+        target_link_libraries(szgpu_fortran PUBLIC szgpu::szgpu stdc++)
+        set_target_properties(szgpu_fortran PROPERTIES
             Fortran_MODULE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/fortran_modules)
-        target_include_directories(fsz_fortran INTERFACE
+        target_include_directories(szgpu_fortran INTERFACE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/fortran_modules>)
-        if(FSZ_BUILD_EXAMPLES)
-            add_executable(fsz_example_fortran fortran/example_fsz.f90)
-            target_link_libraries(fsz_example_fortran PRIVATE fsz_fortran)
+        if(SZGPU_BUILD_EXAMPLES)
+            add_executable(szgpu_example_fortran fortran/example_szgpu.f90)
+            target_link_libraries(szgpu_example_fortran PRIVATE szgpu_fortran)
         endif()
-        if(FSZ_BUILD_TESTS)
-            add_executable(fsz_test_fortran fortran/test_fsz.f90)
-            target_link_libraries(fsz_test_fortran PRIVATE fsz_fortran)
-            add_test(NAME fortran COMMAND fsz_test_fortran)
+        if(SZGPU_BUILD_TESTS)
+            add_executable(szgpu_test_fortran fortran/test_szgpu.f90)
+            target_link_libraries(szgpu_test_fortran PRIVATE szgpu_fortran)
+            add_test(NAME fortran COMMAND szgpu_test_fortran)
         endif()
-        install(TARGETS fsz_fortran
+        install(TARGETS szgpu_fortran
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/fortran_modules/fsz.mod
-            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/fsz)
+        install(FILES ${CMAKE_CURRENT_BINARY_DIR}/fortran_modules/szgpu.mod
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/szgpu)
     else()
-        message(STATUS "FSZ: no Fortran compiler found; skipping the Fortran interface")
+        message(STATUS "SZ-GPU: no Fortran compiler found; skipping the Fortran interface")
     endif()
 endif()
 
-install(TARGETS fsz EXPORT fszTargets
+install(TARGETS szgpu EXPORT szgpuTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-if(FSZ_BUILD_SHARED)
-    install(TARGETS fsz_shared EXPORT fszTargets
+if(SZGPU_BUILD_SHARED)
+    install(TARGETS szgpu_shared EXPORT szgpuTargets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
-if(FSZ_BUILD_TOOLS)
-    install(TARGETS fsz_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(SZGPU_BUILD_TOOLS)
+    install(TARGETS szgpu_cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(EXPORT fszTargets
-    FILE fszTargets.cmake
-    NAMESPACE fsz::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fsz)
+install(EXPORT szgpuTargets
+    FILE szgpuTargets.cmake
+    NAMESPACE szgpu::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/szgpu)
 
-configure_package_config_file(cmake/fszConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/fszConfig.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fsz)
+configure_package_config_file(cmake/szgpuConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/szgpuConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/szgpu)
 write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/fszConfigVersion.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/szgpuConfigVersion.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion)
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/fszConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/fszConfigVersion.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/fsz)
+    ${CMAKE_CURRENT_BINARY_DIR}/szgpuConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/szgpuConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/szgpu)

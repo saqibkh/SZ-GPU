@@ -1,4 +1,4 @@
-#include "fsz/fsz.hpp"
+#include "szgpu/szgpu.hpp"
 
 #include <cuda_runtime.h>
 #include <cmath>
@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
     std::size_t n = (argc > 1) ? std::strtoull(argv[1], nullptr, 10) : (1u << 22);
     float    eb = (argc > 2) ? std::strtof(argv[2], nullptr) : 1e-3f;
 
-    std::printf("FSZ %s  N=%zu  abs_eb=%g\n", fsz::version(), n, eb);
+    std::printf("SZ-GPU %s  N=%zu  abs_eb=%g\n", szgpu::version(), n, eb);
 
     std::vector<float> h_in(n);
     for (std::size_t i = 0; i < n; ++i)
@@ -28,14 +28,14 @@ int main(int argc, char** argv) {
     unsigned char* d_cmp = nullptr;
     check_cuda(cudaMalloc(&d_in,  n * sizeof(float)),                          "alloc d_in");
     check_cuda(cudaMalloc(&d_out, n * sizeof(float)),                          "alloc d_out");
-    check_cuda(cudaMalloc(&d_cmp, fsz::max_compressed_bytes(n)),               "alloc d_cmp");
+    check_cuda(cudaMalloc(&d_cmp, szgpu::max_compressed_bytes(n)),               "alloc d_cmp");
     check_cuda(cudaMemcpy(d_in, h_in.data(), n * sizeof(float),
                           cudaMemcpyHostToDevice),                             "memcpy h2d");
 
-    fsz::Workspace ws(n);
+    szgpu::Workspace ws(n);
 
-    auto cresult = fsz::compress(d_in, d_cmp, n, eb, ws);
-    fsz::decompress(d_out, d_cmp, n, eb, cresult, ws);
+    auto cresult = szgpu::compress(d_in, d_cmp, n, eb, ws);
+    szgpu::decompress(d_out, d_cmp, n, eb, cresult, ws);
     check_cuda(cudaDeviceSynchronize(), "synchronize");
 
     std::vector<float> h_out(n);

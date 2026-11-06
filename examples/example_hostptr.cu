@@ -1,5 +1,5 @@
 
-#include "fsz/fsz.h"
+#include "szgpu/szgpu.h"
 
 #include <cmath>
 #include <cstdio>
@@ -18,18 +18,18 @@ int main() {
                                             * std::cos(0.04f * (float)y)
                                             + 0.1f * std::sin(0.03f * (float)z);
 
-    std::vector<unsigned char> cmp(fsz_max_compressed_bytes(n));
+    std::vector<unsigned char> cmp(szgpu_max_compressed_bytes(n));
     std::size_t cmp_size = 0;
-    fsz_status_t s = fsz_compress_hostptr(in.data(), cmp.data(), n, eb, &cmp_size);
-    if (s != FSZ_STATUS_OK) {
-        std::printf("compress failed: %s\n", fsz_status_string(s));
+    szgpu_status_t s = szgpu_compress_hostptr(in.data(), cmp.data(), n, eb, &cmp_size);
+    if (s != SZGPU_STATUS_OK) {
+        std::printf("compress failed: %s\n", szgpu_status_string(s));
         return 1;
     }
 
     std::vector<float> out(n);
-    s = fsz_decompress_hostptr(out.data(), cmp.data(), cmp_size, n, eb);
-    if (s != FSZ_STATUS_OK) {
-        std::printf("decompress failed: %s\n", fsz_status_string(s));
+    s = szgpu_decompress_hostptr(out.data(), cmp.data(), cmp_size, n, eb);
+    if (s != SZGPU_STATUS_OK) {
+        std::printf("decompress failed: %s\n", szgpu_status_string(s));
         return 1;
     }
 
@@ -39,7 +39,7 @@ int main() {
         if (e > max_err) max_err = e;
     }
 
-    std::printf("FSZ %s  N=%zu  abs_eb=%g\n", fsz_version(), n, (double)eb);
+    std::printf("SZ-GPU %s  N=%zu  abs_eb=%g\n", szgpu_version(), n, (double)eb);
     std::printf("  cmp_size  = %zu B (from %zu B)\n", cmp_size, n * sizeof(float));
     std::printf("  CR        = %.3f\n", (double)(n * sizeof(float)) / (double)cmp_size);
     std::printf("  max_err   = %.3e (bound %.3e)\n", max_err, (double)eb);

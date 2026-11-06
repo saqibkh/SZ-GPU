@@ -1,13 +1,13 @@
-#ifndef FSZ_TOOLS_FILE_FORMAT_HPP
-#define FSZ_TOOLS_FILE_FORMAT_HPP
+#ifndef SZGPU_TOOLS_FILE_FORMAT_HPP
+#define SZGPU_TOOLS_FILE_FORMAT_HPP
 
-// On-disk container written by the fsz command line tool.
+// On-disk container written by the szgpu command line tool.
 
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 
-namespace fsz_file {
+namespace szgpu_file {
 
 constexpr char     MAGIC[4]    = {'F', 'S', 'Z', '1'};
 constexpr uint32_t FORMAT_VER  = 1;
@@ -29,7 +29,7 @@ struct Header {
     uint64_t payload_size;
 };
 
-static_assert(sizeof(Header) == HEADER_SIZE, "FSZ file header must be 56 bytes");
+static_assert(sizeof(Header) == HEADER_SIZE, "SZ-GPU file header must be 56 bytes");
 static_assert(offsetof(Header, magic)        ==  0, "bad magic offset");
 static_assert(offsetof(Header, version)      ==  4, "bad version offset");
 static_assert(offsetof(Header, ndims)        ==  8, "bad ndims offset");

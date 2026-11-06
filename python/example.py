@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A short tour of the FSZ Python bindings.
+"""A short tour of the SZ-GPU Python bindings.
 
 Builds a smooth 128 x 128 x 128 float32 field, compresses it with a relative
 error bound of 1e-3, decompresses it, and reports what that cost and what it
@@ -15,14 +15,14 @@ import time
 import numpy as np
 
 try:
-    import fsz
+    import szgpu
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    import fsz
+    import szgpu
 
 
 def smooth_field(n=128):
-    """A smooth, wavy scalar field of shape (n, n, n), the kind of data FSZ is for."""
+    """A smooth, wavy scalar field of shape (n, n, n), the kind of data SZ-GPU is for."""
     axis = np.linspace(0.0, 2.0 * np.pi, n, dtype=np.float32)
     z, y, x = np.meshgrid(axis, axis, axis, indexing="ij")
     field = (np.sin(x) * np.cos(y)
@@ -32,8 +32,8 @@ def smooth_field(n=128):
 
 
 def main():
-    print("FSZ Python bindings %s (library %s)"
-          % (fsz.__version__, fsz.library_version()))
+    print("SZ-GPU Python bindings %s (library %s)"
+          % (szgpu.__version__, szgpu.library_version()))
     print()
 
     field = smooth_field(128)
@@ -45,11 +45,11 @@ def main():
     print()
 
     t0 = time.time()
-    blob = fsz.compress(field, eb_rel, mode="rel")
+    blob = szgpu.compress(field, eb_rel, mode="rel")
     t_compress = time.time() - t0
 
     t0 = time.time()
-    back = fsz.decompress(blob)
+    back = szgpu.decompress(blob)
     t_decompress = time.time() - t0
 
     value_range = np.float32(field.max() - field.min())
@@ -62,7 +62,7 @@ def main():
     within = max_err <= tolerance * float(abs_eb)
 
     print("compressed  : %d bytes (%d header + %d bitstream) in %.3f s"
-          % (len(blob), fsz.HEADER_SIZE, len(blob) - fsz.HEADER_SIZE, t_compress))
+          % (len(blob), szgpu.HEADER_SIZE, len(blob) - szgpu.HEADER_SIZE, t_compress))
     print("ratio       : %.2fx smaller than the raw float32 data" % ratio)
     print("decompressed: %.3f s" % t_decompress)
     print()
@@ -80,8 +80,8 @@ def main():
 
     print("A blob carries its own shape and bound, so a file round trip needs")
     print("no extra bookkeeping:")
-    print("    fsz.compress_file(src, dst, 1e-3, dims=(128, 128, 128))")
-    print("    field = fsz.decompress_file(dst)")
+    print("    szgpu.compress_file(src, dst, 1e-3, dims=(128, 128, 128))")
+    print("    field = szgpu.decompress_file(dst)")
 
     return 0 if (within and back.shape == field.shape) else 1
 

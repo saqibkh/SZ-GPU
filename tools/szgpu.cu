@@ -1,8 +1,8 @@
-// fsz: command line front end for the FSZ GPU error-bounded lossy compressor.
-// Run 'fsz --help' for usage.
+// szgpu: command line front end for the SZ-GPU error-bounded lossy compressor.
+// Run 'szgpu --help' for usage.
 
-#include "fsz/fsz.hpp"
-#include "fsz_file_format.hpp"
+#include "szgpu/szgpu.hpp"
+#include "szgpu_file_format.hpp"
 
 #include <cuda_runtime.h>
 #include <unistd.h>
@@ -50,7 +50,7 @@ std::string fmt(const char* f, ...) {
 
 [[noreturn]] void die_usage(const std::string& msg) {
     std::fprintf(stderr, "ERROR: %s\n", msg.c_str());
-    std::fprintf(stderr, "Run 'fsz --help' for usage.\n");
+    std::fprintf(stderr, "Run 'szgpu --help' for usage.\n");
     std::exit(RC_ERROR);
 }
 
@@ -77,23 +77,23 @@ size_t      dtype_size(DType t) { return (t == DType::F64) ? sizeof(double) : si
 
 void usage(std::FILE* out) {
     std::fprintf(out,
-        "FSZ %s  GPU error-bounded lossy compressor for float32 and float64 arrays\n"
+        "SZ-GPU %s  error-bounded lossy compressor for float32 and float64 arrays\n"
         "\n"
         "Usage:\n"
-        "  fsz -i data.f32 -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
+        "  szgpu -i data.f32 -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
         "        compress and decompress in memory, then report ratio,\n"
         "        throughput and reconstruction error (writes nothing)\n"
         "\n"
-        "  fsz -z -i data.f32 -o data.fsz -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
-        "        compress to a self-describing .fsz file\n"
+        "  szgpu -z -i data.f32 -o data.szgpu -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
+        "        compress to a self-describing .szgpu file\n"
         "\n"
-        "  fsz -t f64 -z -i data.d64 -o data.fsz -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
+        "  szgpu -t f64 -z -i data.d64 -o data.szgpu -eb rel 1e-3 [-d D1 [D2 [D3]]]\n"
         "        the same for a float64 input array\n"
         "\n"
-        "  fsz -x -i data.fsz -o data.out.f32\n"
-        "        decompress a .fsz file, no other arguments needed\n"
+        "  szgpu -x -i data.szgpu -o data.out.f32\n"
+        "        decompress a .szgpu file, no other arguments needed\n"
         "\n"
-        "  fsz -x -i stream.bin -o out.f32 -n N -eb abs V --bare\n"
+        "  szgpu -x -i stream.bin -o out.f32 -n N -eb abs V --bare\n"
         "        decompress a bare bitstream written with --bare\n"
         "\n"
         "Options:\n"
@@ -127,10 +127,10 @@ void usage(std::FILE* out) {
         "there as it does for compression.\n"
         "\n"
         "With neither -z nor -x the tool inspects the first four bytes of the\n"
-        "input: an FSZ container is decompressed, anything else is reported.\n"
+        "input: an SZ-GPU container is decompressed, anything else is reported.\n"
         "\n"
         "Exit status: 0 pass, 1 error bound violated, 2 usage or file error.\n",
-        fsz::version());
+        szgpu::version());
 }
 
 bool parse_u64(const char* s, uint64_t& out) {
@@ -295,8 +295,8 @@ void parse_dim_list(int argc, char** argv, int& i, std::vector<uint64_t>& dims) 
                     die_usage("bad dimension list '" + first +
                               "'; expected D1xD2xD3 with positive integers");
                 }
-                if (dims.size() == fsz_file::MAX_DIMS) {
-                    die_usage("at most " + std::to_string(fsz_file::MAX_DIMS) +
+                if (dims.size() == szgpu_file::MAX_DIMS) {
+                    die_usage("at most " + std::to_string(szgpu_file::MAX_DIMS) +
                               " dimensions are supported, got '" + first + "'");
                 }
                 dims.push_back(v);
@@ -313,7 +313,7 @@ void parse_dim_list(int argc, char** argv, int& i, std::vector<uint64_t>& dims) 
         die_usage("bad dimension '" + first + "'; expected a positive integer");
     }
     dims.push_back(v);
-    while (dims.size() < fsz_file::MAX_DIMS && i + 1 < argc &&
+    while (dims.size() < szgpu_file::MAX_DIMS && i + 1 < argc &&
            parse_u64(argv[i + 1], v)) {
         if (v == 0) die_usage("dimensions must be positive");
         dims.push_back(v);
@@ -501,19 +501,19 @@ int run_compress(const Options& o, bool write_output) {
     T*             d_in  = nullptr;
     T*             d_out = nullptr;
     unsigned char* d_cmp = nullptr;
-    const size_t cmp_alloc = fsz::max_compressed_bytes(n);
+    const size_t cmp_alloc = szgpu::max_compressed_bytes(n);
     check_cuda(cudaMalloc(&d_in,  n * sizeof(T)), "allocating the input buffer");
     check_cuda(cudaMalloc(&d_out, n * sizeof(T)), "allocating the output buffer");
     check_cuda(cudaMalloc(&d_cmp, cmp_alloc),     "allocating the compressed buffer");
     check_cuda(cudaMemcpy(d_in, h_in.data(), n * sizeof(T), cudaMemcpyHostToDevice),
                "copying the input to the device");
 
-    fsz::Workspace ws(n);
+    szgpu::Workspace ws(n);
 
-    fsz_compress_result_t r{};
+    szgpu_compress_result_t r{};
     for (int i = 0; i < WARMUP_ITERS; ++i) {
-        r = fsz::compress(d_in, d_cmp, n, eb_abs, ws);
-        fsz::decompress(d_out, d_cmp, n, eb_abs, r, ws);
+        r = szgpu::compress(d_in, d_cmp, n, eb_abs, ws);
+        szgpu::decompress(d_out, d_cmp, n, eb_abs, r, ws);
     }
     check_cuda(cudaDeviceSynchronize(), "warmup");
 
@@ -521,13 +521,13 @@ int run_compress(const Options& o, bool write_output) {
     double c_ms_sum = 0.0;
     for (int i = 0; i < TIMED_ITERS; ++i) {
         t.start();
-        r = fsz::compress(d_in, d_cmp, n, eb_abs, ws);
+        r = szgpu::compress(d_in, d_cmp, n, eb_abs, ws);
         c_ms_sum += t.stop();
     }
     double d_ms_sum = 0.0;
     for (int i = 0; i < TIMED_ITERS; ++i) {
         t.start();
-        fsz::decompress(d_out, d_cmp, n, eb_abs, r, ws);
+        szgpu::decompress(d_out, d_cmp, n, eb_abs, r, ws);
         d_ms_sum += t.stop();
     }
     check_cuda(cudaGetLastError(), "the timed loop");
@@ -580,8 +580,8 @@ int run_compress(const Options& o, bool write_output) {
             write_all(o.out_path, h_cmp.data(), h_cmp.size());
             total_bytes = (uint64_t)h_cmp.size();
         } else {
-            const fsz_file::Header hdr =
-                fsz_file::make_header(dims, ndims, (double)eb_abs, is_f64,
+            const szgpu_file::Header hdr =
+                szgpu_file::make_header(dims, ndims, (double)eb_abs, is_f64,
                                       (uint64_t)r.cmp_size);
             std::FILE* f = std::fopen(o.out_path.c_str(), "wb");
             if (!f) die("cannot open output " + o.out_path);
@@ -601,7 +601,7 @@ int run_compress(const Options& o, bool write_output) {
     const size_t in_bytes = n * sizeof(T);
     const double cr = (double)n * (double)sizeof(T) / (double)r.cmp_size;
 
-    std::printf("FSZ %s\n", fsz::version());
+    std::printf("SZ-GPU %s\n", szgpu::version());
     std::printf("  input      = %s (%.2f MB)\n",
                 o.in_path.c_str(), (double)in_bytes / (1024.0 * 1024.0));
     std::printf("  dtype      = %s\n", TypeTraits<T>::name);
@@ -617,7 +617,7 @@ int run_compress(const Options& o, bool write_output) {
         } else {
             std::printf("  output     = %s (%llu bytes total, %zu byte header)\n",
                         o.out_path.c_str(), (unsigned long long)total_bytes,
-                        sizeof(fsz_file::Header));
+                        sizeof(szgpu_file::Header));
         }
     }
     std::printf("  compress   = %.2f ms (%.2f GB/s)\n", c_ms, gbps(in_bytes, c_ms));
@@ -665,10 +665,10 @@ int run_decompress_typed(const Options& o, const DecompressPlan& p) {
     const size_t n      = (size_t)p.n;
     const T      eb_abs = (T)p.eb_abs;
 
-    fsz_compress_result_t r{};
+    szgpu_compress_result_t r{};
     r.cmp_size    = p.payload_size;
-    r.num_tiles   = fsz::num_tiles(n);
-    r.data_offset = fsz::num_tiles(n) * 8;
+    r.num_tiles   = szgpu::num_tiles(n);
+    r.data_offset = szgpu::num_tiles(n) * 8;
 
     if (p.payload_size < r.data_offset) {
         die(fmt("the bitstream is %zu bytes but %zu elements need at least a "
@@ -678,17 +678,17 @@ int run_decompress_typed(const Options& o, const DecompressPlan& p) {
 
     T*             d_out = nullptr;
     unsigned char* d_cmp = nullptr;
-    size_t cmp_alloc = fsz::max_compressed_bytes(n);
+    size_t cmp_alloc = szgpu::max_compressed_bytes(n);
     if (cmp_alloc < p.payload_size) cmp_alloc = p.payload_size;
     check_cuda(cudaMalloc(&d_out, n * sizeof(T)), "allocating the output buffer");
     check_cuda(cudaMalloc(&d_cmp, cmp_alloc),     "allocating the compressed buffer");
     check_cuda(cudaMemcpy(d_cmp, p.payload, p.payload_size, cudaMemcpyHostToDevice),
                "copying the bitstream to the device");
 
-    fsz::Workspace ws(n);
+    szgpu::Workspace ws(n);
 
     for (int i = 0; i < WARMUP_ITERS; ++i) {
-        fsz::decompress(d_out, d_cmp, n, eb_abs, r, ws);
+        szgpu::decompress(d_out, d_cmp, n, eb_abs, r, ws);
     }
     check_cuda(cudaDeviceSynchronize(), "warmup");
 
@@ -696,7 +696,7 @@ int run_decompress_typed(const Options& o, const DecompressPlan& p) {
     double d_ms_sum = 0.0;
     for (int i = 0; i < TIMED_ITERS; ++i) {
         t.start();
-        fsz::decompress(d_out, d_cmp, n, eb_abs, r, ws);
+        szgpu::decompress(d_out, d_cmp, n, eb_abs, r, ws);
         d_ms_sum += t.stop();
     }
     check_cuda(cudaGetLastError(), "the timed loop");
@@ -714,7 +714,7 @@ int run_decompress_typed(const Options& o, const DecompressPlan& p) {
     const size_t out_bytes = n * sizeof(T);
     const double cr = (double)n * (double)sizeof(T) / (double)p.payload_size;
 
-    std::printf("FSZ %s\n", fsz::version());
+    std::printf("SZ-GPU %s\n", szgpu::version());
     std::printf("  input      = %s (%zu bytes)\n", o.in_path.c_str(), p.raw_size);
     std::printf("  dtype      = %s%s\n", TypeTraits<T>::name,
                 p.from_header ? "  (from the file header)" : "");
@@ -787,26 +787,26 @@ int run_decompress(const Options& o) {
         payload      = raw.data();
         payload_size = raw.size();
     } else {
-        if (raw.size() < fsz_file::HEADER_SIZE) {
-            die(fmt("%s is %zu bytes, too short to hold a %zu byte FSZ header; "
+        if (raw.size() < szgpu_file::HEADER_SIZE) {
+            die(fmt("%s is %zu bytes, too short to hold a %zu byte SZ-GPU header; "
                     "if this is a bare bitstream, pass --bare with -n and -eb abs",
-                    o.in_path.c_str(), raw.size(), fsz_file::HEADER_SIZE));
+                    o.in_path.c_str(), raw.size(), szgpu_file::HEADER_SIZE));
         }
-        fsz_file::Header hdr{};
+        szgpu_file::Header hdr{};
         std::memcpy(&hdr, raw.data(), sizeof(hdr));
-        if (!fsz_file::has_magic(hdr.magic)) {
-            die(o.in_path + " is not an FSZ container; if this is a bare bitstream, "
+        if (!szgpu_file::has_magic(hdr.magic)) {
+            die(o.in_path + " is not an SZ-GPU container; if this is a bare bitstream, "
                             "pass --bare with -n and -eb abs");
         }
-        if (hdr.version != fsz_file::FORMAT_VER) {
+        if (hdr.version != szgpu_file::FORMAT_VER) {
             die(fmt("%s uses container version %u, this build reads version %u",
-                    o.in_path.c_str(), hdr.version, fsz_file::FORMAT_VER));
+                    o.in_path.c_str(), hdr.version, szgpu_file::FORMAT_VER));
         }
-        if (hdr.ndims < 1 || hdr.ndims > fsz_file::MAX_DIMS) {
+        if (hdr.ndims < 1 || hdr.ndims > szgpu_file::MAX_DIMS) {
             die(fmt("%s records %u dimensions, which is out of range",
                     o.in_path.c_str(), hdr.ndims));
         }
-        const uint64_t have = (uint64_t)(raw.size() - fsz_file::HEADER_SIZE);
+        const uint64_t have = (uint64_t)(raw.size() - szgpu_file::HEADER_SIZE);
         if (hdr.payload_size > have) {
             die(fmt("%s claims a %llu byte bitstream but only %llu bytes follow "
                     "the header; the file looks truncated",
@@ -814,7 +814,7 @@ int run_decompress(const Options& o) {
                     (unsigned long long)hdr.payload_size,
                     (unsigned long long)have));
         }
-        dtype = fsz_file::header_is_f64(hdr) ? DType::F64 : DType::F32;
+        dtype = szgpu_file::header_is_f64(hdr) ? DType::F64 : DType::F32;
         if (o.have_dtype && o.dtype != dtype) {
             die(fmt("%s records %s data but -t asks for %s; the container "
                     "already carries its element type, so leave -t out",
@@ -824,9 +824,9 @@ int run_decompress(const Options& o) {
         dims[0] = hdr.dims[0];
         dims[1] = hdr.dims[1];
         dims[2] = hdr.dims[2];
-        n64    = fsz_file::element_count(hdr);
-        eb_abs = fsz_file::header_eb(hdr);
-        payload      = raw.data() + fsz_file::HEADER_SIZE;
+        n64    = szgpu_file::element_count(hdr);
+        eb_abs = szgpu_file::header_eb(hdr);
+        payload      = raw.data() + szgpu_file::HEADER_SIZE;
         payload_size = (size_t)hdr.payload_size;
         from_header  = true;
     }
@@ -851,13 +851,13 @@ int run_decompress(const Options& o) {
 
 bool looks_like_container(const std::string& path) {
     const long bytes = file_size_or_die(path);
-    if (bytes < (long)fsz_file::HEADER_SIZE) return false;
+    if (bytes < (long)szgpu_file::HEADER_SIZE) return false;
     std::FILE* f = std::fopen(path.c_str(), "rb");
     if (!f) die("cannot open input " + path);
     char magic[4] = {0, 0, 0, 0};
     const bool got = std::fread(magic, 1, 4, f) == 4;
     std::fclose(f);
-    return got && fsz_file::has_magic(magic);
+    return got && szgpu_file::has_magic(magic);
 }
 
 }  // namespace
@@ -877,7 +877,7 @@ int main(int argc, char** argv) {
         if (o.bare)    die_usage("--bare applies to -z and -x; pick one");
         if (looks_like_container(o.in_path)) return run_decompress(o);
         return f64 ? run_compress<double>(o, false) : run_compress<float>(o, false);
-    } catch (const fsz::Error& e) {
+    } catch (const szgpu::Error& e) {
         std::fprintf(stderr, "ERROR: %s\n", e.what());
         return RC_ERROR;
     } catch (const std::exception& e) {

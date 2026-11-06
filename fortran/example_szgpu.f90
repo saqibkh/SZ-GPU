@@ -1,6 +1,6 @@
-program example_fsz
+program example_szgpu
     use iso_c_binding, only: c_size_t, c_int, c_int8_t
-    use fsz
+    use szgpu
     implicit none
 
     integer, parameter :: nx = 64, ny = 64, nz = 64
@@ -22,22 +22,22 @@ program example_fsz
 
     n  = int(nx, c_size_t) * ny * nz
     eb = 1.0e-3
-    allocate(cmp(fsz_max_compressed_bytes(n)))
+    allocate(cmp(szgpu_max_compressed_bytes(n)))
 
-    call fsz_compress(field, n, eb, cmp, cmp_size, ierr)
-    if (ierr /= FSZ_OK) then
-        print '(a)', 'compression failed: ' // fsz_status_message(ierr)
+    call szgpu_compress(field, n, eb, cmp, cmp_size, ierr)
+    if (ierr /= SZGPU_OK) then
+        print '(a)', 'compression failed: ' // szgpu_status_message(ierr)
         error stop 1
     end if
 
-    call fsz_decompress(recon, cmp, cmp_size, n, eb, ierr)
-    if (ierr /= FSZ_OK) then
-        print '(a)', 'decompression failed: ' // fsz_status_message(ierr)
+    call szgpu_decompress(recon, cmp, cmp_size, n, eb, ierr)
+    if (ierr /= SZGPU_OK) then
+        print '(a)', 'decompression failed: ' // szgpu_status_message(ierr)
         error stop 1
     end if
 
     max_err = maxval(abs(field - recon))
-    print '(a,a)',        'FSZ       : ', fsz_version()
+    print '(a,a)',        'SZ-GPU       : ', szgpu_version()
     print '(a,f0.3)',     'ratio     : ', real(n) * 4.0 / real(cmp_size)
     print '(a,es10.3,a,es10.3)', 'max error : ', max_err, '  bound ', eb
     if (max_err <= 1.01 * eb) then
@@ -46,4 +46,4 @@ program example_fsz
         print '(a)', 'FAIL'
         error stop 1
     end if
-end program example_fsz
+end program example_szgpu

@@ -1,10 +1,10 @@
-"""Tests for the FSZ Python bindings.
+"""Tests for the SZ-GPU Python bindings.
 
 A plain script, so it needs nothing beyond numpy and the bindings themselves.
 Every case prints [PASS] or [FAIL]; the exit status is 0 only when all of them
 pass. Run it from the repository root:
 
-    python python/tests/test_fsz.py
+    python python/tests/test_szgpu.py
 """
 
 import os
@@ -17,10 +17,10 @@ import traceback
 import numpy as np
 
 try:
-    import fsz
+    import szgpu
 except ImportError:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import fsz
+    import szgpu
 
 
 SHAPE = (97, 113, 131)
@@ -64,12 +64,12 @@ def relative_bound_f64(arr, eb_rel):
 
 def header_flags(blob):
     """The flags word of a container header."""
-    return struct.unpack(fsz.HEADER_FORMAT, blob[:fsz.HEADER_SIZE])[3]
+    return struct.unpack(szgpu.HEADER_FORMAT, blob[:szgpu.HEADER_SIZE])[3]
 
 
 def header_eb_f64(blob):
     """The float64 error bound a container records, read at full precision."""
-    return struct.unpack("<d", blob[fsz.EB_OFFSET:fsz.EB_OFFSET + 8])[0]
+    return struct.unpack("<d", blob[szgpu.EB_OFFSET:szgpu.EB_OFFSET + 8])[0]
 
 
 def expect_raises(exc_types, fn, *args, **kwargs):
@@ -107,8 +107,8 @@ def field_f64():
 @case("abs-mode round trip on a smooth %s field, abs 1e-3" % (SHAPE,))
 def test_abs_roundtrip():
     original = field()
-    blob = fsz.compress(original, ABS_EB, mode="abs")
-    back = fsz.decompress(blob)
+    blob = szgpu.compress(original, ABS_EB, mode="abs")
+    back = szgpu.decompress(blob)
 
     assert back.shape == original.shape, \
         "shape changed: %s became %s" % (original.shape, back.shape)
@@ -127,8 +127,8 @@ def test_abs_roundtrip():
 @case("rel-mode round trip on the same field, rel 1e-3")
 def test_rel_roundtrip():
     original = field()
-    blob = fsz.compress(original, REL_EB, mode="rel")
-    back = fsz.decompress(blob)
+    blob = szgpu.compress(original, REL_EB, mode="rel")
+    back = szgpu.decompress(blob)
 
     assert back.shape == original.shape, \
         "shape changed: %s became %s" % (original.shape, back.shape)
@@ -140,7 +140,7 @@ def test_rel_roundtrip():
     limit = TOLERANCE * expected
     assert max_err <= limit, "max error %.6e exceeds %.6e" % (max_err, limit)
 
-    stored = struct.unpack(fsz.HEADER_FORMAT, blob[:fsz.HEADER_SIZE])[7]
+    stored = struct.unpack(szgpu.HEADER_FORMAT, blob[:szgpu.HEADER_SIZE])[7]
     assert stored == expected, \
         "header records bound %.9e, expected %.9e" % (stored, expected)
     print("       max error %.6e, bound %.6e (rel %g of range %.4f)"
@@ -153,8 +153,8 @@ def test_f64_roundtrip():
     original = field_f64()
     assert original.dtype == np.float64 and original.ndim == 3
 
-    blob = fsz.compress(original, REL_EB, mode="rel")
-    back = fsz.decompress(blob)
+    blob = szgpu.compress(original, REL_EB, mode="rel")
+    back = szgpu.decompress(blob)
 
     assert back.shape == original.shape, \
         "shape changed: %s became %s" % (original.shape, back.shape)
@@ -170,7 +170,7 @@ def test_f64_roundtrip():
     assert max_err <= limit, "max error %.6e exceeds %.6e" % (max_err, limit)
 
     flags = header_flags(blob)
-    assert flags & fsz.FLAG_F64, \
+    assert flags & szgpu.FLAG_F64, \
         "the header flags are 0x%x, without the float64 bit" % flags
     stored = header_eb_f64(blob)
     assert stored == expected, \
@@ -192,8 +192,8 @@ def test_flat_roundtrip():
         np.sin(t) + 0.3 * np.cos(3.0 * t), dtype=np.float32)
     assert original.ndim == 1 and original.size == n
 
-    blob = fsz.compress(original, 1e-2, mode="abs")
-    back = fsz.decompress(blob)
+    blob = szgpu.compress(original, 1e-2, mode="abs")
+    back = szgpu.decompress(blob)
 
     assert back.shape == (n,), "shape changed: %s" % (back.shape,)
     nonfinite = int(np.count_nonzero(~np.isfinite(back)))
@@ -209,22 +209,22 @@ def test_flat_roundtrip():
 @case("compress_file / decompress_file cycle with a recorded shape")
 def test_file_cycle():
     original = field()
-    workdir = tempfile.mkdtemp(prefix="fsz_test_")
+    workdir = tempfile.mkdtemp(prefix="szgpu_test_")
     try:
         raw_path = os.path.join(workdir, "field.f32")
-        cmp_path = os.path.join(workdir, "field.fsz")
+        cmp_path = os.path.join(workdir, "field.szgpu")
         out_path = os.path.join(workdir, "field.out.f32")
 
         original.tofile(raw_path)
-        info = fsz.compress_file(raw_path, cmp_path, ABS_EB, mode="abs", dims=SHAPE)
+        info = szgpu.compress_file(raw_path, cmp_path, ABS_EB, mode="abs", dims=SHAPE)
 
         assert info["n"] == original.size, \
             "compress_file counted %d elements, expected %d" % (info["n"], original.size)
-        assert info["cmp_size"] == os.path.getsize(cmp_path) - fsz.HEADER_SIZE, \
+        assert info["cmp_size"] == os.path.getsize(cmp_path) - szgpu.HEADER_SIZE, \
             "cmp_size %d disagrees with the file size" % info["cmp_size"]
         assert info["cr"] > 1.0, "compression ratio %.3f is not above 1" % info["cr"]
 
-        back = fsz.decompress_file(cmp_path, out_path)
+        back = szgpu.decompress_file(cmp_path, out_path)
         assert back.shape == SHAPE, \
             "decompress_file returned shape %s, expected %s" % (back.shape, SHAPE)
 
@@ -246,33 +246,33 @@ def test_file_cycle():
 @case("float64 compress_file / decompress_file cycle on a .d64")
 def test_f64_file_cycle():
     original = field_f64()
-    workdir = tempfile.mkdtemp(prefix="fsz_test_")
+    workdir = tempfile.mkdtemp(prefix="szgpu_test_")
     try:
         raw_path = os.path.join(workdir, "field.d64")
-        cmp_path = os.path.join(workdir, "field.fsz")
+        cmp_path = os.path.join(workdir, "field.szgpu")
         out_path = os.path.join(workdir, "field.out.d64")
 
         original.tofile(raw_path)
         assert os.path.getsize(raw_path) == original.size * 8, \
             "the raw file is not 8 bytes per value"
 
-        info = fsz.compress_file(raw_path, cmp_path, ABS_EB, mode="abs",
+        info = szgpu.compress_file(raw_path, cmp_path, ABS_EB, mode="abs",
                                  dims=SHAPE, dtype=np.float64)
 
         assert info["n"] == original.size, \
             "compress_file counted %d elements, expected %d" % (info["n"], original.size)
-        assert info["cmp_size"] == os.path.getsize(cmp_path) - fsz.HEADER_SIZE, \
+        assert info["cmp_size"] == os.path.getsize(cmp_path) - szgpu.HEADER_SIZE, \
             "cmp_size %d disagrees with the file size" % info["cmp_size"]
         expected_cr = float(original.nbytes) / float(info["cmp_size"])
         assert abs(info["cr"] - expected_cr) < 1e-9, \
             "cr %.6f is not the float64 ratio %.6f" % (info["cr"], expected_cr)
 
         with open(cmp_path, "rb") as f:
-            head = f.read(fsz.HEADER_SIZE)
-        assert header_flags(head) & fsz.FLAG_F64, \
+            head = f.read(szgpu.HEADER_SIZE)
+        assert header_flags(head) & szgpu.FLAG_F64, \
             "the container on disk does not flag float64 data"
 
-        back = fsz.decompress_file(cmp_path, out_path)
+        back = szgpu.decompress_file(cmp_path, out_path)
         assert back.dtype == np.float64, \
             "decompress_file returned dtype %s, expected float64" % back.dtype
         assert back.shape == SHAPE, \
@@ -298,17 +298,17 @@ def test_mixed_dtypes():
     f32 = field()
     f64 = field_f64()
 
-    blob32 = fsz.compress(f32, ABS_EB, mode="abs")
-    blob64 = fsz.compress(f64, ABS_EB, mode="abs")
+    blob32 = szgpu.compress(f32, ABS_EB, mode="abs")
+    blob64 = szgpu.compress(f64, ABS_EB, mode="abs")
 
-    assert header_flags(blob32) & fsz.FLAG_F64 == 0, \
+    assert header_flags(blob32) & szgpu.FLAG_F64 == 0, \
         "a float32 container has the float64 flag set"
-    assert header_flags(blob64) & fsz.FLAG_F64 == fsz.FLAG_F64, \
+    assert header_flags(blob64) & szgpu.FLAG_F64 == szgpu.FLAG_F64, \
         "a float64 container does not have the float64 flag set"
     assert blob32 != blob64, "the two element types produced the same blob"
 
-    back32 = fsz.decompress(blob32)
-    back64 = fsz.decompress(blob64)
+    back32 = szgpu.decompress(blob32)
+    back64 = szgpu.decompress(blob64)
 
     assert back32.dtype == np.float32, "float32 blob came back as %s" % back32.dtype
     assert back64.dtype == np.float64, "float64 blob came back as %s" % back64.dtype
@@ -322,8 +322,8 @@ def test_mixed_dtypes():
         assert max_err <= TOLERANCE * ABS_EB, \
             "%s max error %.6e exceeds %.6e" % (name, max_err, TOLERANCE * ABS_EB)
 
-    payload64 = blob64[fsz.HEADER_SIZE:]
-    from_raw = fsz.decompress_raw(payload64, f64.size, ABS_EB, dtype=np.float64)
+    payload64 = blob64[szgpu.HEADER_SIZE:]
+    from_raw = szgpu.decompress_raw(payload64, f64.size, ABS_EB, dtype=np.float64)
     assert from_raw.dtype == np.float64, "decompress_raw returned %s" % from_raw.dtype
     assert from_raw.tobytes() == back64.ravel().tobytes(), \
         "the raw and container paths disagree on the float64 stream"
@@ -335,16 +335,16 @@ def test_mixed_dtypes():
 @case("compress_raw / decompress_raw agree with the container path")
 def test_raw_consistency():
     original = field()
-    blob = fsz.compress(original, ABS_EB, mode="abs")
-    payload = fsz.compress_raw(original, np.float32(ABS_EB))
+    blob = szgpu.compress(original, ABS_EB, mode="abs")
+    payload = szgpu.compress_raw(original, np.float32(ABS_EB))
 
-    assert payload == blob[fsz.HEADER_SIZE:], \
+    assert payload == blob[szgpu.HEADER_SIZE:], \
         ("the bare bitstream is %d bytes and the container payload is %d; "
          "they must be identical"
-         % (len(payload), len(blob) - fsz.HEADER_SIZE))
+         % (len(payload), len(blob) - szgpu.HEADER_SIZE))
 
-    from_raw = fsz.decompress_raw(payload, original.size, np.float32(ABS_EB))
-    from_blob = fsz.decompress(blob).ravel()
+    from_raw = szgpu.decompress_raw(payload, original.size, np.float32(ABS_EB))
+    from_blob = szgpu.decompress(blob).ravel()
 
     assert from_raw.shape == from_blob.shape, \
         "shapes differ: %s and %s" % (from_raw.shape, from_blob.shape)
@@ -355,49 +355,49 @@ def test_raw_consistency():
 
 @case("error cases are reported, not crashed on")
 def test_error_cases():
-    exc = expect_raises(TypeError, fsz.compress,
+    exc = expect_raises(TypeError, szgpu.compress,
                         np.zeros((8, 8), dtype=np.int32), 1e-3)
     print("       int32 input    -> TypeError: %s" % str(exc).split(".")[0])
 
-    exc = expect_raises(ValueError, fsz.compress,
+    exc = expect_raises(ValueError, szgpu.compress,
                         np.zeros((2, 3, 4, 5), dtype=np.float32), 1e-3)
     print("       4 axes         -> ValueError: %s" % str(exc).split(".")[0])
 
-    exc = expect_raises(ValueError, fsz.compress,
+    exc = expect_raises(ValueError, szgpu.compress,
                         np.full((32, 32), 2.5, dtype=np.float32), 1e-3, "rel")
     print("       constant + rel -> ValueError: %s" % str(exc).split(",")[0])
 
-    exc = expect_raises(ValueError, fsz.compress,
+    exc = expect_raises(ValueError, szgpu.compress,
                         np.zeros((8, 8), dtype=np.float32), 0.0, "abs")
     print("       eb 0           -> ValueError: %s" % str(exc).split(",")[0])
 
-    exc = expect_raises(ValueError, fsz.compress,
+    exc = expect_raises(ValueError, szgpu.compress,
                         np.zeros((8, 8), dtype=np.float32), 1e-3, "sideways")
     print("       unknown mode   -> ValueError: %s" % str(exc).split(",")[0])
 
-    blob = fsz.compress(np.asarray(np.arange(4096), dtype=np.float32), 1e-2, "abs")
+    blob = szgpu.compress(np.asarray(np.arange(4096), dtype=np.float32), 1e-2, "abs")
 
-    exc = expect_raises((ValueError, RuntimeError), fsz.decompress,
-                        blob[:fsz.HEADER_SIZE - 20])
+    exc = expect_raises((ValueError, RuntimeError), szgpu.decompress,
+                        blob[:szgpu.HEADER_SIZE - 20])
     print("       stub blob      -> %s" % type(exc).__name__)
 
-    exc = expect_raises((ValueError, RuntimeError), fsz.decompress,
-                        blob[:fsz.HEADER_SIZE + (len(blob) - fsz.HEADER_SIZE) // 2])
+    exc = expect_raises((ValueError, RuntimeError), szgpu.decompress,
+                        blob[:szgpu.HEADER_SIZE + (len(blob) - szgpu.HEADER_SIZE) // 2])
     print("       cut payload    -> %s: %s" % (type(exc).__name__, str(exc).split(";")[0]))
 
-    exc = expect_raises((ValueError, RuntimeError), fsz.decompress,
+    exc = expect_raises((ValueError, RuntimeError), szgpu.decompress,
                         b"NOPE" + blob[4:])
     print("       bad magic      -> %s" % type(exc).__name__)
 
-    assert fsz.decompress(blob).shape == (4096,), "a good blob stopped working"
+    assert szgpu.decompress(blob).shape == (4096,), "a good blob stopped working"
 
 
 @case("compression ratio on smooth data clears 5x")
 def test_compression_ratio():
     original = field()
     for mode, eb in (("abs", ABS_EB), ("rel", REL_EB)):
-        blob = fsz.compress(original, eb, mode=mode)
-        payload_size = len(blob) - fsz.HEADER_SIZE
+        blob = szgpu.compress(original, eb, mode=mode)
+        payload_size = len(blob) - szgpu.HEADER_SIZE
         cr = (original.size * 4.0) / payload_size
         print("       %s %g: %d bytes -> %d bytes, cr = %.3f"
               % (mode, eb, original.nbytes, payload_size, cr))
@@ -406,8 +406,8 @@ def test_compression_ratio():
 
 
 def main():
-    print("FSZ Python bindings %s, library %s"
-          % (fsz.__version__, fsz.library_version()))
+    print("SZ-GPU Python bindings %s, library %s"
+          % (szgpu.__version__, szgpu.library_version()))
     print("%d cases" % len(_CASES))
     print()
 

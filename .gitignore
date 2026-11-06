@@ -4,7 +4,7 @@ cmake-build/
 *.o
 *.a
 *.so
-*.fsz
+*.szgpu
 *.dec.f32
 *.log
 __pycache__/

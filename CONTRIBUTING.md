@@ -1,4 +1,4 @@
-# Contributing to FSZ
+# Contributing to SZ-GPU
 
 Bug reports, questions, and patches are welcome.
 
@@ -8,12 +8,12 @@ Please include:
 
 - the GPU and its compute capability (`nvidia-smi --query-gpu=name,compute_cap --format=csv`),
 - the CUDA toolkit version (`nvcc --version`),
-- how FSZ was built (CMake or Makefile, and any options),
+- how SZ-GPU was built (CMake or Makefile, and any options),
 - the element count, dimensions, element type, and error bound,
 - what you expected and what happened.
 
-A reproducer that runs from the `fsz` tool is the most useful form, for example
-`fsz -i field.f32 -eb rel 1e-3 -d 512 512 512`. If the data cannot be shared, a
+A reproducer that runs from the `szgpu` tool is the most useful form, for example
+`szgpu -i field.f32 -eb rel 1e-3 -d 512 512 512`. If the data cannot be shared, a
 synthetic array that shows the same behavior works just as well.
 
 For anything that looks like wrong output, please say whether the error bound
@@ -32,12 +32,12 @@ The suites cover the C and C++ APIs (`roundtrip`, `hostptr`) and the Fortran
 interface (`fortran`). The Python tests run separately:
 
 ```bash
-PYTHONPATH=python python3 python/tests/test_fsz.py
+PYTHONPATH=python python3 python/tests/test_szgpu.py
 ```
 
 ## What a change needs
 
-FSZ is an error-bounded compressor, so correctness has a specific meaning and
+SZ-GPU is an error-bounded compressor, so correctness has a specific meaning and
 patches are held to it:
 
 1. **The bound holds.** Every reconstructed value must be within
@@ -46,9 +46,9 @@ patches are held to it:
 2. **The stream does not move unintentionally.** A change meant to affect only
    performance, memory, or the build must leave the compressed bytes identical.
    The quickest check is to compress a field before and after and compare
-   checksums; `fsz -z -i field.f32 -o out.fsz -eb rel 1e-3` then `md5sum`.
+   checksums; `szgpu -z -i field.f32 -o out.szgpu -eb rel 1e-3` then `md5sum`.
 3. **Deliberate format changes are versioned.** The container carries a version
-   field, and an existing `.fsz` file must keep decompressing. If it cannot,
+   field, and an existing `.szgpu` file must keep decompressing. If it cannot,
    that is a major version.
 4. **New behavior comes with a test.** Add the case to the suite that covers the
    affected interface, and prefer a case that fails before the change.
@@ -61,7 +61,7 @@ patches are held to it:
 - Follow the surrounding code: four-space indent, and the naming already in
   each file.
 - Comments explain why something is done, not what the line does.
-- Keep the public headers free of implementation detail; `src/fsz_internal.cuh`
+- Keep the public headers free of implementation detail; `src/szgpu_internal.cuh`
   is where format constants live.
 
 ## License

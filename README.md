@@ -1,38 +1,39 @@
-# FSZ
+# SZ-GPU (FSZ)
 
-FSZ is an extremely fast GPU error-bounded lossy compressor in the SZ family.
-It stands at the family's Pareto frontier: achieving both extreme throughput
-and a high compression ratio simultaneously.
+SZ-GPU (FSZ) is the production GPU library for the SZ compressor family. It
+is an extremely fast error-bounded lossy compressor. It stands at the
+family's Pareto frontier: achieving both extreme throughput and a high
+compression ratio simultaneously. It is the compressor introduced in the
+SC'26 paper *FSZ: Breaking the Prediction-Throughput Trade-off in GPU Lossy
+Compression* ([arXiv:2607.15413](https://arxiv.org/abs/2607.15413)),
+nominated for the Best Paper Award at SC'26.
 
-You set an error bound, absolute or relative. FSZ compresses at up to
+You set an error bound, absolute or relative. SZ-GPU compresses at up to
 1.4 TB/s and decompresses at up to 1.7 TB/s (measured on a B200 GPU with
 the tool in this repository), and every reconstructed value is guaranteed
 to stay within the bound. The data can be anything floating point:
 simulation fields, sensor and instrument captures, checkpoints, machine
 learning tensors.
 
-FSZ is the compressor introduced in the SC'26 paper
-*FSZ: Breaking the Prediction-Throughput Trade-off in GPU Lossy Compression*
-([arXiv:2607.15413](https://arxiv.org/abs/2607.15413)), nominated for the
-Best Paper Award at SC'26.
-
 What you get:
 
 - **A guaranteed bound.** Every reconstructed value stays within the
   absolute or relative error bound you set, on float32 and float64 alike,
   and the tool checks it on every run.
-- **Nothing to tune.** FSZ adapts to the data on its own: no modes to
+- **Nothing to tune.** SZ-GPU adapts to the data on its own: no modes to
   select, no flags to sweep, and compression ratios hold up on smooth,
   sparse, and unstructured data alike.
-- **Every interface.** The `fsz` binary plus C, C++, Python, and Fortran
+- **Every interface.** The `szgpu` binary plus C, C++, Python, and Fortran
   APIs. Python takes numpy arrays of any shape and hands them back with
   the shape restored; Fortran accepts `real(4)` and `real(8)` arrays up to
-  rank four. `.fsz` files are self-describing and decompress with no
+  rank four. `.szgpu` files are self-describing and decompress with no
   further arguments; a bare zero-overhead bitstream mode is also available.
 - **BSD 3-Clause licensed.**
 
 ## News
 
+- **2026-11**: The project is renamed SZ-GPU, the production GPU library for
+  the SZ compressor family. SZ-GPU 1.0.1 is released.
 - **2026-08**: FSZ 1.0.0 is released.
 - **2026-07**: The FSZ paper is nominated for the Best Paper Award at SC'26.
 - **2026-07**: Paper accepted at SC'26.
@@ -51,12 +52,12 @@ What you get:
 ### CMake
 
 ```bash
-git clone https://github.com/JiajunHuang1999/FSZ.git
-cd FSZ
+git clone https://github.com/szcompressor/SZ-GPU.git
+cd SZ-GPU
 cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build --output-on-failure   # optional, needs a GPU
-sudo cmake --install build                   # optional: libfsz, headers, fsz tool
+sudo cmake --install build                   # optional: libszgpu, headers, szgpu tool
 ```
 
 The default build covers GPU generations from Ampere on: it embeds native
@@ -66,21 +67,21 @@ or newer) together with PTX, so compute-capability 8.6/8.9 devices run the
 PTX. Override with `-DCMAKE_CUDA_ARCHITECTURES=90` (or `80;90;100`, etc.)
 to build for specific generations only.
 
-Toggles: `-DFSZ_BUILD_SHARED=OFF` (skip `libfsz.so`), `-DFSZ_BUILD_TOOLS=OFF`,
-`-DFSZ_BUILD_EXAMPLES=OFF`, `-DFSZ_BUILD_TESTS=OFF`.
+Toggles: `-DSZGPU_BUILD_SHARED=OFF` (skip `libszgpu.so`), `-DSZGPU_BUILD_TOOLS=OFF`,
+`-DSZGPU_BUILD_EXAMPLES=OFF`, `-DSZGPU_BUILD_TESTS=OFF`.
 
 Installed projects can consume the library with CMake's `find_package`:
 
 ```cmake
-find_package(fsz REQUIRED)
-target_link_libraries(myapp PRIVATE fsz::fsz)
+find_package(szgpu REQUIRED)
+target_link_libraries(myapp PRIVATE szgpu::szgpu)
 ```
 
 ### Makefile (nvcc only)
 
 ```bash
 make ARCH=90        # ARCH auto-detected from nvidia-smi if omitted
-./build/fsz -h
+./build/szgpu -h
 ```
 
 ## 3. Quick start
@@ -88,7 +89,7 @@ make ARCH=90        # ARCH auto-detected from nvidia-smi if omitted
 Compress any raw float32 array with a relative error bound of `1e-3`:
 
 ```bash
-./build/fsz -i velocity.f32 -eb rel 1e-3
+./build/szgpu -i velocity.f32 -eb rel 1e-3
 ```
 
 This runs an in-memory compress + decompress round trip and reports the
@@ -96,29 +97,29 @@ compression ratio, throughput, and the measured maximum error against the
 bound. To actually write files:
 
 ```bash
-./build/fsz -z -i velocity.f32 -o velocity.fsz -eb rel 1e-3 -d 512 512 512
-./build/fsz -x -i velocity.fsz -o velocity.out.f32
+./build/szgpu -z -i velocity.f32 -o velocity.szgpu -eb rel 1e-3 -d 512 512 512
+./build/szgpu -x -i velocity.szgpu -o velocity.out.f32
 ```
 
-The `.fsz` file is self-describing: decompression needs no dimensions, sizes,
+The `.szgpu` file is self-describing: decompression needs no dimensions, sizes,
 or error bounds on the command line.
 
 ## 4. Command-line tool
 
 ```
-fsz -i data.f32 -eb rel 1e-3 [-d D1 [D2 [D3]]]        report mode: round trip + error check, writes nothing
-fsz -z -i data.f32 -o data.fsz -eb rel 1e-3 [-d ...]  compress to a self-describing .fsz file
-fsz -x -i data.fsz -o data.out.f32                    decompress (no other arguments needed)
-fsz -t f64 -i data.d64 -eb rel 1e-3                   any mode on float64 data
+szgpu -i data.f32 -eb rel 1e-3 [-d D1 [D2 [D3]]]        report mode: round trip + error check, writes nothing
+szgpu -z -i data.f32 -o data.szgpu -eb rel 1e-3 [-d ...]  compress to a self-describing .szgpu file
+szgpu -x -i data.szgpu -o data.out.f32                    decompress (no other arguments needed)
+szgpu -t f64 -i data.d64 -eb rel 1e-3                   any mode on float64 data
 ```
 
 | Option | Meaning |
 |---|---|
-| `-z` / `-x` | force compress / decompress. Without either, files starting with the FSZ magic are decompressed and raw inputs get the report mode. |
+| `-z` / `-x` | force compress / decompress. Without either, files starting with the SZ-GPU magic are decompressed and raw inputs get the report mode. |
 | `-i`, `-o` | input / output path. Without `-o`, `-z` and `-x` run fully but write nothing. |
 | `-eb abs V` | absolute error bound `V`. |
 | `-eb rel V` | relative error bound: `V * (max - min)` of the input data. |
-| `-t f32\|f64` | element type of a raw input file (default `f32`). Decompression of `.fsz` files reads the type from the header instead. |
+| `-t f32\|f64` | element type of a raw input file (default `f32`). Decompression of `.szgpu` files reads the type from the header instead. |
 | `-d D1 [D2 [D3]]` | data dimensions in C order (`D1` varies slowest, like a NumPy shape). Also accepts `-d D1xD2xD3`. Optional; the product must match the file's element count. |
 | `--bare` | with `-z`: write the raw bitstream without the 56-byte header. Decompressing a bare stream needs `-n` (or `-d`) and `-eb abs`. |
 | `-n N` | element count, for decompressing bare streams. |
@@ -133,18 +134,18 @@ file errors.
 Device-pointer API (data already on the GPU; zero extra copies):
 
 ```c
-#include <fsz/fsz.h>
+#include <szgpu/szgpu.h>
 
-fsz_workspace_t* ws = NULL;
-fsz_workspace_create(&ws, n_max);            /* reusable across calls */
+szgpu_workspace_t* ws = NULL;
+szgpu_workspace_create(&ws, n_max);            /* reusable across calls */
 
-fsz_compress_result_t r;
-fsz_compress(d_in, d_cmp, n, eb_abs, ws, /*stream=*/0, &r);
+szgpu_compress_result_t r;
+szgpu_compress(d_in, d_cmp, n, eb_abs, ws, /*stream=*/0, &r);
 /* r.cmp_size bytes of d_cmp now hold the bitstream */
 
-fsz_decompress(d_out, d_cmp, n, eb_abs, &r, ws, /*stream=*/0);
+szgpu_decompress(d_out, d_cmp, n, eb_abs, &r, ws, /*stream=*/0);
 
-fsz_workspace_destroy(ws);
+szgpu_workspace_destroy(ws);
 ```
 
 Host-pointer API (one call, no CUDA boilerplate; the library manages device
@@ -152,60 +153,60 @@ memory and transfers internally):
 
 ```c
 size_t cmp_size = 0;
-unsigned char* cmp = malloc(fsz_max_compressed_bytes(n));
-fsz_compress_hostptr(h_in, cmp, n, eb_abs, &cmp_size);
+unsigned char* cmp = malloc(szgpu_max_compressed_bytes(n));
+szgpu_compress_hostptr(h_in, cmp, n, eb_abs, &cmp_size);
 
-fsz_decompress_hostptr(h_out, cmp, cmp_size, n, eb_abs);
+szgpu_decompress_hostptr(h_out, cmp, cmp_size, n, eb_abs);
 ```
 
 Supporting calls:
 
 ```c
-size_t fsz_max_compressed_bytes(size_t n);   /* safe d_cmp / cmp capacity  */
-size_t fsz_num_tiles(size_t n);
-fsz_compress_result_t fsz_make_result(size_t n, size_t cmp_size);
+size_t szgpu_max_compressed_bytes(size_t n);   /* safe d_cmp / cmp capacity  */
+size_t szgpu_num_tiles(size_t n);
+szgpu_compress_result_t szgpu_make_result(size_t n, size_t cmp_size);
                                              /* rebuild the result struct
                                                 for a stored bare stream   */
-const char* fsz_version(void);
-const char* fsz_status_string(fsz_status_t);
+const char* szgpu_version(void);
+const char* szgpu_status_string(szgpu_status_t);
 ```
 
-All `fsz_*` calls return `fsz_status_t`; `FSZ_STATUS_OK == 0`.
+All `szgpu_*` calls return `szgpu_status_t`; `SZGPU_STATUS_OK == 0`.
 
 Float64 data uses the `_f64` variants of the same four entry points
-(`fsz_compress_f64`, `fsz_decompress_f64`, `fsz_compress_hostptr_f64`,
-`fsz_decompress_hostptr_f64`), which take `double` buffers and a `double`
+(`szgpu_compress_f64`, `szgpu_decompress_f64`, `szgpu_compress_hostptr_f64`,
+`szgpu_decompress_hostptr_f64`), which take `double` buffers and a `double`
 bound. Workspaces and the sizing helpers are shared between element types.
 
 Buffer rules:
 
 - `d_in` / `d_out`: `n * sizeof(float)` device bytes.
-- `d_cmp`: `fsz_max_compressed_bytes(n)` device bytes, 4-byte aligned
+- `d_cmp`: `szgpu_max_compressed_bytes(n)` device bytes, 4-byte aligned
   (any `cudaMalloc` allocation qualifies).
 - Workspace: created once with a maximum capacity and reused for any
-  `n <= fsz_workspace_capacity(ws)`. Allocate one workspace per concurrent
+  `n <= szgpu_workspace_capacity(ws)`. Allocate one workspace per concurrent
   stream; a workspace must not be shared by two in-flight calls. Passing
   `NULL` instead is also allowed: the call then creates and destroys a
   temporary workspace internally (one-shot mode; decompression is then
   synchronous). Reuse a workspace when compressing repeatedly.
-- `fsz_compress` synchronizes the stream before returning (it must deliver
-  `cmp_size`); `fsz_decompress` is fully asynchronous on the given stream.
+- `szgpu_compress` synchronizes the stream before returning (it must deliver
+  `cmp_size`); `szgpu_decompress` is fully asynchronous on the given stream.
 
 ## 6. C++ API
 
 ```cpp
-#include <fsz/fsz.hpp>
+#include <szgpu/szgpu.hpp>
 
-fsz::Workspace ws(n_max);                       // RAII
-auto r = fsz::compress(d_in, d_cmp, n, eb_abs, ws);
-fsz::decompress(d_out, d_cmp, n, eb_abs, r, ws);
+szgpu::Workspace ws(n_max);                       // RAII
+auto r = szgpu::compress(d_in, d_cmp, n, eb_abs, ws);
+szgpu::decompress(d_out, d_cmp, n, eb_abs, r, ws);
 
 // host-pointer one-shots
-size_t cmp_size = fsz::compress_hostptr(h_in, cmp, n, eb_abs);
-fsz::decompress_hostptr(h_out, cmp, cmp_size, n, eb_abs);
+size_t cmp_size = szgpu::compress_hostptr(h_in, cmp, n, eb_abs);
+szgpu::decompress_hostptr(h_out, cmp, cmp_size, n, eb_abs);
 ```
 
-Errors are reported as `fsz::Error` (derives from `std::runtime_error`).
+Errors are reported as `szgpu::Error` (derives from `std::runtime_error`).
 All of these functions also accept `double*` buffers through overloads.
 
 ## 7. Python API
@@ -216,19 +217,19 @@ pip install ./python
 
 The install compiles and bundles the shared library, so nothing needs to be
 built first; it only needs a CUDA toolkit on the machine. Set
-`FSZ_CUDA_ARCHITECTURES` (for example `80;90;100`) to target specific GPU
+`SZGPU_CUDA_ARCHITECTURES` (for example `80;90;100`) to target specific GPU
 generations. If no toolkit is present the install still succeeds and the
-module falls back to `FSZ_LIB`, a repository build directory, or the system
+module falls back to `SZGPU_LIB`, a repository build directory, or the system
 search path, naming all of them if none works.
 
 ```python
 import numpy as np
-import fsz
+import szgpu
 
 arr = np.fromfile("velocity.f32", dtype=np.float32).reshape(512, 512, 512)
 
-blob = fsz.compress(arr, eb=1e-3, mode="rel")   # bytes (self-describing)
-out  = fsz.decompress(blob)                     # float32 ndarray, shape restored
+blob = szgpu.compress(arr, eb=1e-3, mode="rel")   # bytes (self-describing)
+out  = szgpu.decompress(blob)                     # float32 ndarray, shape restored
 
 print(arr.shape == out.shape, np.abs(arr - out).max())
 ```
@@ -236,35 +237,35 @@ print(arr.shape == out.shape, np.abs(arr - out).max())
 Arrays of dtype float64 compress through the float64 path and decompress
 back as float64; the container records which type was written.
 
-File helpers mirror the CLI: `fsz.compress_file(src, dst, eb, mode="rel",
-dims=None, dtype=np.float32)` and `fsz.decompress_file(src, dst=None)`. The
-package is a thin `ctypes` wrapper over `libfsz.so`: point it at a custom
-build with the `FSZ_LIB` environment variable if the library is not
+File helpers mirror the CLI: `szgpu.compress_file(src, dst, eb, mode="rel",
+dims=None, dtype=np.float32)` and `szgpu.decompress_file(src, dst=None)`. The
+package is a thin `ctypes` wrapper over `libszgpu.so`: point it at a custom
+build with the `SZGPU_LIB` environment variable if the library is not
 installed system-wide.
 
 ## 8. Fortran API
 
-The `fsz` module wraps the host-pointer calls with generic interfaces for
+The `szgpu` module wraps the host-pointer calls with generic interfaces for
 `real(4)` and `real(8)` data; arrays of rank one to four are passed
 directly:
 
 ```fortran
-use fsz
+use szgpu
 real(4) :: field(512, 512, 512)
 integer(c_int8_t), allocatable :: cmp(:)
 integer(c_size_t) :: n, cmp_size
 integer(c_int) :: ierr
 
 n = int(size(field), c_size_t)
-allocate(cmp(fsz_max_compressed_bytes(n)))
+allocate(cmp(szgpu_max_compressed_bytes(n)))
 
-call fsz_compress(field, n, 1.0e-3, cmp, cmp_size, ierr)    ! absolute bound
-call fsz_decompress(field, cmp, cmp_size, n, 1.0e-3, ierr)
+call szgpu_compress(field, n, 1.0e-3, cmp, cmp_size, ierr)    ! absolute bound
+call szgpu_decompress(field, cmp, cmp_size, n, 1.0e-3, ierr)
 ```
 
-`ierr` is `FSZ_OK` (0) on success and `fsz_status_message(ierr)` describes
+`ierr` is `SZGPU_OK` (0) on success and `szgpu_status_message(ierr)` describes
 a failure. CMake builds the module automatically when a Fortran compiler
-is present (the `fsz_fortran` library and `fsz.mod`); with the Makefile,
+is present (the `szgpu_fortran` library and `szgpu.mod`); with the Makefile,
 run `make fortran`.
 
 For data that is already on the GPU, pass device addresses as `type(c_ptr)`
@@ -274,13 +275,13 @@ and `target data use_device_ptr`:
 
 ```fortran
 type(c_ptr) :: ws
-type(fsz_result) :: res
+type(szgpu_result) :: res
 
-call fsz_workspace_create(ws, n, ierr)
+call szgpu_workspace_create(ws, n, ierr)
 !$acc host_data use_device(field, cmp_buffer)
-call fsz_compress_device(c_loc(field), c_loc(cmp_buffer), n, 1.0e-3, ws, res, ierr)
+call szgpu_compress_device(c_loc(field), c_loc(cmp_buffer), n, 1.0e-3, ws, res, ierr)
 !$acc end host_data
-call fsz_workspace_destroy(ws)
+call szgpu_workspace_destroy(ws)
 ```
 
 `res%cmp_size` gives the stream length. The element type follows the kind of
@@ -319,7 +320,7 @@ single-field calls:
 | NYX/temperature | 537 MB | 1036 | 1303 |
 | SCALE-LETKF/T | 564 MB | 972 | 1226 |
 
-Float64 fields, measured with the `fsz` tool on the same B200 at rel `1e-3`
+Float64 fields, measured with the `szgpu` tool on the same B200 at rel `1e-3`
 (average of 5 timed runs after 3 warmups):
 
 | Field | Size | CR | Compress GB/s | Decompress GB/s |
@@ -329,14 +330,15 @@ Float64 fields, measured with the `fsz` tool on the same B200 at rel `1e-3`
 
 ## 10. Citation
 
+If you use SZ-GPU, please cite the FSZ paper:
+
 ```bibtex
 @inproceedings{huang2026fsz,
   title     = {{FSZ}: Breaking the Prediction-Throughput Trade-off in {GPU} Lossy Compression},
   author    = {Huang, Jiajun},
   booktitle = {Proceedings of the International Conference for High Performance
-               Computing, Networking, Storage and Analysis (SC '26)},
-  year      = {2026},
-  note      = {To appear. arXiv:2607.15413}
+               Computing, Networking, Storage and Analysis},
+  year      = {2026}
 }
 ```
 
